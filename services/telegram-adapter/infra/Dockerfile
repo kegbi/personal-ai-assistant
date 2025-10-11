@@ -2,21 +2,30 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 
-COPY package.json package-lock.json* .npmrc* ./
-RUN npm ci --omit=dev=false
+# Install pnpm globally (no corepack) and set config for better peer resolution
+RUN npm i -g pnpm
+
+# Copy manifest and lockfiles
+COPY package.json pnpm-lock.yaml* .npmrc* ./
+# Use frozen lockfile only if it exists
+RUN pnpm install --dev
 
 COPY tsconfig*.json ./
 COPY src ./src
 
-RUN npm run build
+RUN pnpm run build
 
 # ---------- run stage ----------
 FROM node:24-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY package.json package-lock.json* .npmrc* ./
-RUN npm ci --omit=dev
+# Install pnpm globally (no corepack) and set config for better peer resolution
+RUN npm i -g pnpm \
+
+COPY package.json pnpm-lock.yaml* .npmrc* ./
+# Use frozen lockfile only if it exists
+RUN pnpm install --prod
 
 COPY --from=build /app/dist ./dist
 

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   redis:
     image: redis:7-alpine
@@ -47,30 +45,30 @@ services:
     networks:
       - appnet
 
-  tg-adapter:
-    build:
-      context: ../services/telegram-adapter
-      dockerfile: ./infra/Dockerfile
-    env_file:
-      - ./.env
-      - ./telegram.env    # доп-переменные/оверрайды адаптера (опц.)
-    environment:
-      NODE_ENV: production
-      TZ: Europe/Belgrade
-      TG_MODE: polling               # фиксируем polling
-      AGENT_BASE_URL: http://agent-server:3000
-    depends_on:
-      agent-server:
-        condition: service_healthy
-    # Порты НЕ публикуем в polling-режиме
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health || echo ok"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - appnet
+#  tg-adapter:
+#    build:
+#      context: ../services/telegram-adapter
+#      dockerfile: ./infra/Dockerfile
+#    env_file:
+#      - ./.env
+#      - ./telegram.env    # доп-переменные/оверрайды адаптера (опц.)
+#    environment:
+#      NODE_ENV: production
+#      TZ: Europe/Belgrade
+#      TG_MODE: polling               # фиксируем polling
+#      AGENT_BASE_URL: http://agent-server:3000
+#    depends_on:
+#      agent-server:
+#        condition: service_healthy
+#    # Порты НЕ публикуем в polling-режиме
+#    healthcheck:
+#      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health || echo ok"]
+#      interval: 15s
+#      timeout: 5s
+#      retries: 10
+#    restart: unless-stopped
+#    networks:
+#      - appnet
 
 volumes:
   redis-data:
