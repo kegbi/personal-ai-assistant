@@ -49,7 +49,7 @@ Transport concerns (webhooks, polling, auth, rate limits) are isolated. The agen
 ## 3) Nest Modules (M‑C‑S)
 
 ### 3.1 ConfigModule
-- Loads/validates env (Joi/class‑validator).
+- Loads/validates env (Zod + class‑validator).
 - Provides typed access via `ConfigService` (Redis host/port, window size, LLM keys, allowed chat id).
 
 ### 3.2 HealthModule
@@ -292,11 +292,26 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 ## 12) “Day‑1” Checklist
 
 - [ ] Fill `infra/.env` with tokens and keys.  
-- [ ] Implement DTOs in agent `transport/dto`.  
-- [ ] Scaffold Nest modules and empty services/controllers.  
-- [ ] Implement `MemoryService` (Redis) and plug into `OrchestratorService`.  
-- [ ] Add 2 tools: Quotes (HTTP) and Contacts (in‑memory).  
+- [x] Implement DTOs in agent `transport/dto`.  
+- [x] Scaffold Nest modules and empty services/controllers.  
+- [ ] Implement `MemoryService` (Redis) and plug into `OrchestratorService`. _(In-memory placeholder is wired; replace with Redis client and persistence.)_  
+- [x] Add 2 tools: Quotes (HTTP) and Contacts (in‑memory). _(Scaffolded modules exist; flesh out real integrations.)_  
 - [ ] Bring up `docker compose up -d --build` and test `/health` and a hello flow.  
+
+---
+
+## 13) Progress Snapshot (2025‑10‑12)
+
+**Completed**
+- Bootstrap Nest server with Config, Common, Health, Transport, Orchestrator, Memory, and Tools modules wired end-to-end.
+- Added global validation (Zod-config + class-validator DTOs) and Request validation pipeline.
+- Scaffolded Quotes and Contacts tool modules plus LangGraph planner/router placeholders for future logic.
+
+**Remaining (near-term)**
+- Replace in-memory `MemoryService` implementation with Redis-backed storage and finalize handle/window policies.
+- Build LangGraph workflow (planner → tool router → responder) using latest Context7 MCP docs and connect tool invocations.
+- Implement real Quotes HTTP client, Contacts state handling, logging interceptor, and exception formatting.
+- Execute Docker Compose stack, verify `/health`, and add initial unit/E2E tests per testing strategy.
 
 ---
 
