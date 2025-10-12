@@ -243,7 +243,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 
 **Important env keys**
 _(Agent secrets live in `infra/.agent-server.env`; Telegram adapter keys go in `infra/.telegram.env`.)_
-- `TG_BOT_TOKEN`, `ALLOWED_CHAT_ID`
+- `TG_BOT_TOKEN`, `ALLOWED_CHAT_IDS`
 - `OPENAI_API_KEY`, `LLM_MODEL`
 - `REDIS_HOST=redis`, `REDIS_PORT=6379`, `MEM_WINDOW_SIZE=15`, `HANDLE_TTL_SECONDS=7200`
 - `AGENT_BASE_URL=http://agent-server:3000` (adapter → agent)

@@ -44,25 +44,19 @@ const configSchema = z.object({
 });
 
 const gatherAllowedChatIds = (): string[] => {
-  const sources = [
-    process.env.TG_ALLOWED_CHAT_IDS,
-    process.env.ALLOWED_CHAT_IDS,
-  ].filter((value): value is string => !!value && value.trim().length > 0);
+  const envValue = process.env.ALLOWED_CHAT_IDS;
+  if (!envValue || envValue.trim().length === 0) {
+    return [];
+  }
 
-  const singleSources = [
-    process.env.TG_ALLOWED_CHAT_ID,
-    process.env.ALLOWED_CHAT_ID,
-  ].filter((value): value is string => !!value && value.trim().length > 0);
-
-  const combined = [
-    ...sources
-      .flatMap((value) => value.split(','))
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0),
-    ...singleSources.map((value) => value.trim()),
-  ];
-
-  return Array.from(new Set(combined));
+  return Array.from(
+    new Set(
+      envValue
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
 };
 
 export const loadConfig = (): AdapterConfig => {

@@ -17,7 +17,7 @@ export class TelegramBridge {
   private readonly bot: Bot;
   private readonly agentClient: AgentClient;
   private readonly config: AdapterConfig;
-  private readonly allowedChatIds: Set<string>;
+  private readonly allowedParticipantIds: Set<string>;
   private readonly metrics: BridgeMetrics = {
     startedAt: new Date(),
     processedUpdates: 0,
@@ -27,7 +27,7 @@ export class TelegramBridge {
   constructor(config: AdapterConfig, agentClient: AgentClient) {
     this.config = config;
     this.agentClient = agentClient;
-    this.allowedChatIds = new Set(config.allowedChatIds);
+    this.allowedParticipantIds = new Set(config.allowedChatIds);
     this.bot = new Bot(config.tgBotToken);
 
     this.registerMiddleware();
@@ -40,7 +40,7 @@ export class TelegramBridge {
     }
 
     await this.bot.start({
-      allowed_updates: ['message'],
+      allowed_updates: ['message', 'my_chat_member'],
       drop_pending_updates: this.config.dropPendingUpdates,
       timeout: Math.max(1, Math.floor(this.config.longPollingTimeoutMs / 1000)),
       onStart: (botInfo) => {
@@ -92,9 +92,20 @@ export class TelegramBridge {
     });
 
     this.bot.use(async (ctx: Context, next: NextFunction) => {
-      if (!this.isAllowedChat(ctx.chat?.id)) {
-        if (ctx.chat?.id) {
-          this.log(`Ignored update from disallowed chat ${ctx.chat.id}`);
+      const chat = ctx.chat;
+      if (chat?.type && chat.type !== 'private') {
+        if (chat.id) {
+          await this.leaveChatIfPossible(ctx, chat.id, chat.type, 'non-private update');
+        }
+        return;
+      }
+
+      if (!this.isAllowedParticipant(ctx.chat?.id, ctx.from?.id)) {
+        const identifier = ctx.chat?.id ?? ctx.from?.id;
+        if (identifier) {
+          this.log(
+            `Ignored update from disallowed participant chat=${ctx.chat?.id ?? 'n/a'} user=${ctx.from?.id ?? 'n/a'}`,
+          );
         }
         return;
       }
@@ -104,6 +115,20 @@ export class TelegramBridge {
   }
 
   private registerHandlers(): void {
+    this.bot.on('my_chat_member', async (ctx) => {
+      const chat = ctx.chat;
+      const newStatus = ctx.myChatMember?.new_chat_member?.status;
+      if (!chat?.id || chat.type === 'private') {
+        return;
+      }
+
+      if (!newStatus || ['left', 'kicked'].includes(newStatus)) {
+        return;
+      }
+
+      await this.leaveChatIfPossible(ctx, chat.id, chat.type, `my_chat_member:${newStatus}`);
+    });
+
     this.bot.command(['start', 'help', 'clear'], async (ctx) => {
       const text = ctx.message?.text;
       if (!text) {
@@ -252,6 +277,35 @@ export class TelegramBridge {
     }
   }
 
+  private async leaveChatIfPossible(
+    ctx: Context,
+    chatId: number | string,
+    chatType?: string,
+    reason?: string,
+  ): Promise<void> {
+    const id = String(chatId);
+    const type = chatType ?? 'unknown';
+    const via = reason ?? 'unspecified';
+
+    try {
+      await ctx.api.leaveChat(chatId);
+      this.log(`Left chat ${id} type=${type} reason=${via}`);
+    } catch (error) {
+      const messageText =
+        error instanceof Error ? error.message : `Unknown error: ${String(error)}`;
+
+      if (
+        /bot (was kicked|is not a member)/i.test(messageText) ||
+        messageText.toLowerCase().includes('chat not found')
+      ) {
+        this.log(`Already absent from chat ${id} type=${type}: ${messageText}`);
+        return;
+      }
+
+      this.log(`Failed to leave chat ${id} type=${type}: ${messageText}`, 'error');
+    }
+  }
+
   private describeUnsupportedMessage(message: Message): string {
     const type = message.chat?.type ?? 'unknown';
     const keys = Object.keys(message).filter(
@@ -260,16 +314,23 @@ export class TelegramBridge {
     return `[${type}] unsupported message (${keys.join(', ')})`;
   }
 
-  private isAllowedChat(chatId?: number | string | null): boolean {
-    if (!chatId) {
-      return false;
-    }
-
-    if (this.allowedChatIds.size === 0) {
+  private isAllowedParticipant(
+    chatId?: number | string | null,
+    userId?: number | string | null,
+  ): boolean {
+    if (this.allowedParticipantIds.size === 0) {
       return true;
     }
 
-    return this.allowedChatIds.has(String(chatId));
+    const identifiers = [chatId, userId]
+      .filter((value): value is number | string => value !== undefined && value !== null)
+      .map((value) => String(value));
+
+    if (identifiers.length === 0) {
+      return false;
+    }
+
+    return identifiers.some((identifier) => this.allowedParticipantIds.has(identifier));
   }
 
   private log(message: string, level: 'info' | 'error' = 'info'): void {

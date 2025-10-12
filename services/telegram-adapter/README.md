@@ -11,15 +11,14 @@ Set the following environment variables (either via `infra/.telegram.env` or you
 | `TG_BOT_TOKEN` | ✅ | Bot token from @BotFather. |
 | `AGENT_BASE_URL` | ✅ | Base URL of the agent server (e.g. `http://agent-server:3000`). |
 | `AGENT_AUTH_TOKEN` | ⭕ | Optional bearer token if the agent requires auth. `AGENT_API_KEY` is also recognised. |
-| `ALLOWED_CHAT_ID` / `TG_ALLOWED_CHAT_ID` | ⭕ | Single chat ID allowed to DM the bot. |
-| `ALLOWED_CHAT_IDS` / `TG_ALLOWED_CHAT_IDS` | ⭕ | Comma-separated list of allowed chat IDs. |
+| `ALLOWED_CHAT_IDS` | ⭕ | Comma-separated list of allowed private chat/user IDs. |
 | `TG_POLLING_TIMEOUT_MS` | ⭕ (default `30000`) | Long-polling timeout. |
 | `AGENT_TIMEOUT_MS` | ⭕ (default `15000`) | HTTP timeout for agent calls. |
 | `HEALTH_PORT` | ⭕ (default `8081`) | Port for the local health endpoint. |
 | `TG_DROP_PENDING_UPDATES` | ⭕ (default `true`) | Drop backlog when the service restarts. |
 | `TG_MODE` | implicit | Only `polling` is supported right now; left for future webhook mode. |
 
-If no allow-list variables are set, every chat is accepted (useful during local testing).
+If no allow-list variables are set, every private chat is accepted (useful during local testing).
 
 ## Local Development
 
@@ -47,6 +46,7 @@ The container image uses the same PNPM workflow and exposes `/health` on port `8
 - Text messages, voice notes (with a signed file URL), and any unknown payloads are normalised into the agent DTO and tagged with lightweight metadata (`messageId`, `chatType`, etc.).
 - When an agent response includes `meta.tool`, the adapter logs the tool name and elapsed time but only the text is sent to Telegram.
 - Errors calling the agent are surfaced to the user with a friendly retry message, while health status flips to `degraded`.
+- The bot automatically leaves non-private chats to avoid being added to groups or channels.
 
 ## Health & Metrics
 
