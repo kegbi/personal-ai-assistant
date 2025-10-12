@@ -21,10 +21,16 @@ export interface AiSection {
   model: string;
 }
 
+export interface MonicaSection {
+  url: string;
+  token: string;
+}
+
 export interface AppConfig {
   app: AppSection;
   redis: RedisSection;
   memory: MemorySection;
   security: SecuritySection;
   ai: AiSection;
+  monica: MonicaSection;
 }

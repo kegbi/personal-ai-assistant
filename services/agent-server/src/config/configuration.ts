@@ -29,4 +29,8 @@ export default (): AppConfig => ({
     apiKey: process.env.OPENAI_API_KEY ?? '',
     model: process.env.LLM_MODEL ?? 'gpt-4o-mini',
   },
+  monica: {
+    url: process.env.MONICA_API_URL ?? 'https://app.monicahq.com/api',
+    token: process.env.MONICA_API_TOKEN ?? '',
+  },
 });

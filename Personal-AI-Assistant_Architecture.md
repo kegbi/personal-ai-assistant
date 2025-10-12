@@ -16,6 +16,7 @@ We are building a modular AI agent that receives user messages from **Telegram**
 - **Module → Controller → Service** pattern everywhere.
 - **LangGraph (in‑process)** inside the Nest “orchestrator” module.
 - **Redis 8** for short‑term conversation memory and “handles” (`last_contact_id`, etc.).
+- **Monica API connector** abstracts CRM calls (reminders, contacts, notes) behind typed services.
 - **Telegram: long polling** for MVP (no public HTTPS needed).
 - **Docker Compose**: 3 services → `redis`, `agent-server` (Nest + LangGraph), `tg-adapter` (grammY).
 - **TypeScript / Node 24** across all services.
@@ -84,7 +85,12 @@ Transport concerns (webhooks, polling, auth, rate limits) are isolated. The agen
   - Repository is in-memory for now (chat-scoped), swappable for DB later.
 - Tools expose **typed methods**; LangGraph nodes call them via DI. No transport-specific logic leaks into tool code.
 
-### 3.7 CommonModule
+### 3.7 MonicaModule (integrations)
+- Provides `MonicaClient` (REST wrapper with auth + pagination helpers).
+- Exposes typed services for CRM features starting with reminders; contacts/notes follow next.
+- Shared across tools so orchestrator and future transports can reuse the same adapter.
+
+### 3.8 CommonModule
 - Cross‑cutting concerns: logging interceptor, exception filter, shared types/utilities.
 
 ---
@@ -180,6 +186,14 @@ services/
    │  │  ├─ memory.service.ts
    │  │  └─ redis.provider.ts
    │  │
+   │  ├─ integrations/
+   │  │  └─ monica/
+   │  │     ├─ monica.module.ts
+   │  │     ├─ monica.client.ts
+   │  │     └─ reminders/
+   │  │        ├─ monica-reminders.service.ts
+   │  │        └─ monica-reminders.types.ts
+   │  │
    │  ├─ tools/
    │  │  ├─ tools.module.ts
    │  │  └─ contacts/
@@ -228,6 +242,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - `OPENAI_API_KEY`, `LLM_MODEL`
 - `REDIS_HOST=redis`, `REDIS_PORT=6379`, `MEM_WINDOW_SIZE=15`, `HANDLE_TTL_SECONDS=7200`
 - `AGENT_BASE_URL=http://agent-server:3000` (adapter → agent)
+- `MONICA_API_URL`, `MONICA_API_TOKEN` (OAuth token for Monica API access)
 
 ---
 
@@ -290,6 +305,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - [x] Scaffold Nest modules and empty services/controllers.  
 - [x] Implement `MemoryService` (Redis) and plug into `OrchestratorService`.  
 - [x] Add Contacts tool (create, lookup, set birthday) and wire LangGraph handles.  
+- [x] Introduce Monica API connector with reminders pagination helpers.  
 - [ ] Bring up `docker compose up -d --build` and test `/health` and a hello flow.  
 
 ---
@@ -302,10 +318,12 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - Implemented Redis-backed `MemoryService` with window + handle helpers.
 - Built LangGraph planner/router with OpenAI planning and contact-management tools.
 - Added structured logging interceptor and global exception formatting.
+- Introduced Monica connector module with reminders fetch + digest helpers.
 
 **Remaining (near-term)**
 - Flesh out contact repository persistence (beyond in-memory) and add list/search surfaces.
 - Expand orchestrator tests (unit + E2E) and add contract coverage for DTOs.
+- Extend Monica integrations (contacts, notes, people updates digest) and expose via tools/services.
 - Wire Telegram adapter (grammY) service with new contacts-centric flows and smoke-test end to end.
 - Execute Docker Compose stack, verify `/health`, and add initial unit/E2E tests per testing strategy.
 

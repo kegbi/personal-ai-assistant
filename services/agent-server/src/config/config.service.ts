@@ -5,6 +5,7 @@ import {
   AppConfig,
   AppSection,
   MemorySection,
+  MonicaSection,
   RedisSection,
   SecuritySection,
 } from './config.types';
@@ -33,5 +34,9 @@ export class AppConfigService {
 
   get ai(): AiSection {
     return this.configService.get<AiSection>('ai', { infer: true });
+  }
+
+  get monica(): MonicaSection {
+    return this.configService.get<MonicaSection>('monica', { infer: true });
   }
 }
