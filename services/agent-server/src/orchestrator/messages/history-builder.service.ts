@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   BaseMessage,
   SystemMessage,
@@ -7,13 +7,17 @@ import {
 } from '@langchain/core/messages';
 import { DEFAULT_SYSTEM_PROMPT } from '../../policies/prompt.policy';
 import { MemoryMessage } from '../../memory/memory.service';
-import { MessageTransformerService } from './message-transformer.service';
+import type { MessageSerializer } from './interfaces/message-serializer';
+import { MESSAGE_SERIALIZER } from './tokens';
 
 @Injectable()
 export class HistoryBuilderService {
   private readonly logger = new Logger(HistoryBuilderService.name);
 
-  constructor(private readonly messageTransformer: MessageTransformerService) {}
+  constructor(
+    @Inject(MESSAGE_SERIALIZER)
+    private readonly messageTransformer: MessageSerializer,
+  ) {}
 
   /**
    * Rebuilds the LangChain conversation history, ensuring each tool response

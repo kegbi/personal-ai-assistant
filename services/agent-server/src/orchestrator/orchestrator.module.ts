@@ -1,20 +1,13 @@
 import { Module } from '@nestjs/common';
-import { LanggraphModule } from './langgraph/langgraph.module';
 import { MemoryModule } from '../memory/memory.module';
 import { ToolsModule } from '../tools/tools.module';
+import { LanggraphModule } from './langgraph/langgraph.module';
+import { MessagesModule } from './messages/messages.module';
 import { OrchestratorService } from './orchestrator.service';
-import { HistoryBuilderService } from './messages/history-builder.service';
-import { GeneratedMessagePersisterService } from './messages/generated-message-persister.service';
-import { MessageTransformerService } from './messages/message-transformer.service';
 
 @Module({
-  imports: [LanggraphModule, MemoryModule, ToolsModule],
-  providers: [
-    OrchestratorService,
-    HistoryBuilderService,
-    GeneratedMessagePersisterService,
-    MessageTransformerService,
-  ],
+  imports: [LanggraphModule, MemoryModule, ToolsModule, MessagesModule],
+  providers: [OrchestratorService],
   exports: [OrchestratorService],
 })
 export class OrchestratorModule {}

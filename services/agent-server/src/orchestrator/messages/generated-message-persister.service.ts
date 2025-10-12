@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { BaseMessage } from '@langchain/core/messages';
 import { MemoryService } from '../../memory/memory.service';
-import { MessageTransformerService } from './message-transformer.service';
+import type { MessageSerializer } from './interfaces/message-serializer';
+import { MESSAGE_SERIALIZER } from './tokens';
 
 @Injectable()
 export class GeneratedMessagePersisterService {
@@ -9,7 +10,8 @@ export class GeneratedMessagePersisterService {
 
   constructor(
     private readonly memoryService: MemoryService,
-    private readonly messageTransformer: MessageTransformerService,
+    @Inject(MESSAGE_SERIALIZER)
+    private readonly messageTransformer: MessageSerializer,
   ) {}
 
   /**

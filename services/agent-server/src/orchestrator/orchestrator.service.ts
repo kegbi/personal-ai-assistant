@@ -1,15 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { AIMessage, BaseMessage, isAIMessage } from '@langchain/core/messages';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  AIMessage,
+  BaseMessage,
+  isAIMessage,
+  isBaseMessage,
+} from '@langchain/core/messages';
 import { MessageReceivedDto } from '../transport/dto/message-received.dto';
 import { AgentResponseDto } from '../transport/dto/agent-response.dto';
 import { MemoryService } from '../memory/memory.service';
 import { GraphFactory, type CompiledGraph } from './langgraph/graph.factory';
 import { HistoryBuilderService } from './messages/history-builder.service';
 import { GeneratedMessagePersisterService } from './messages/generated-message-persister.service';
-import {
-  MessageTransformerService,
-  type ToolInvocationMeta,
-} from './messages/message-transformer.service';
+import type { MessageSerializer } from './messages/interfaces/message-serializer';
+import { MESSAGE_SERIALIZER } from './messages/tokens';
+import type { ToolInvocationMeta } from './messages/types/tool-invocation-meta';
 
 @Injectable()
 export class OrchestratorService {
@@ -21,7 +25,8 @@ export class OrchestratorService {
     private readonly graphFactory: GraphFactory,
     private readonly historyBuilder: HistoryBuilderService,
     private readonly generatedMessagePersister: GeneratedMessagePersisterService,
-    private readonly messageTransformer: MessageTransformerService,
+    @Inject(MESSAGE_SERIALIZER)
+    private readonly messageTransformer: MessageSerializer,
   ) {
     this.graph = this.graphFactory.build();
   }
@@ -61,7 +66,10 @@ export class OrchestratorService {
       },
     );
 
-    const messages = result.messages as BaseMessage[];
+    const rawMessages = Array.isArray(result.messages) ? result.messages : [];
+    const messages = rawMessages.filter((message): message is BaseMessage =>
+      isBaseMessage(message),
+    );
     const generated = messages.slice(initialLength);
 
     this.logger.debug(
