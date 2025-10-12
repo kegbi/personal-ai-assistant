@@ -7,14 +7,6 @@ const envSchema = z.object({
   REDIS_PORT: z.coerce.number().int().default(6379),
   MEM_WINDOW_SIZE: z.coerce.number().int().min(1).default(15),
   HANDLE_TTL_SECONDS: z.coerce.number().int().min(0).default(7200),
-  ALLOWED_CHAT_ID: z
-    .string()
-    .optional()
-    .transform((value) => {
-      const trimmed = value?.trim();
-      return trimmed && trimmed.length > 0 ? trimmed : null;
-    })
-    .default(null),
   OPENAI_API_KEY: z.string().optional().default(''),
   LLM_MODEL: z.string().default(DEFAULT_LLM_MODEL),
   MONICA_API_URL: z.string().url().default('https://app.monicahq.com/api'),

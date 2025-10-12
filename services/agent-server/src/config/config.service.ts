@@ -7,7 +7,6 @@ import {
   MemorySection,
   MonicaSection,
   RedisSection,
-  SecuritySection,
 } from './config.types';
 
 @Injectable()
@@ -26,10 +25,6 @@ export class AppConfigService {
 
   get memory(): MemorySection {
     return this.configService.get<MemorySection>('memory', { infer: true });
-  }
-
-  get security(): SecuritySection {
-    return this.configService.get<SecuritySection>('security', { infer: true });
   }
 
   get ai(): AiSection {

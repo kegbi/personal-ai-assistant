@@ -25,7 +25,6 @@ export class PlannerNode {
       const model = new ChatOpenAI({
         apiKey: this.config.ai.apiKey,
         model: this.config.ai.model,
-        temperature: 0,
       });
 
       this.cachedModel = model.bindTools(this.toolRouterNode.tools);

@@ -12,10 +12,6 @@ export interface MemorySection {
   handleTtlSeconds: number;
 }
 
-export interface SecuritySection {
-  allowedChatId?: string | null;
-}
-
 export interface AiSection {
   apiKey: string;
   model: string;
@@ -31,7 +27,6 @@ export interface AppConfig {
   app: AppSection;
   redis: RedisSection;
   memory: MemorySection;
-  security: SecuritySection;
   ai: AiSection;
   monica: MonicaSection;
 }

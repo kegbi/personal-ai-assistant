@@ -50,16 +50,16 @@ Transport concerns (webhooks, polling, auth, rate limits) are isolated. The agen
 ## 3) Nest Modules (M‑C‑S)
 
 ### 3.1 ConfigModule
-- Loads/validates env (Zod + class‑validator).
-- Provides typed access via `ConfigService` (Redis host/port, window size, LLM keys, allowed chat id).
+- Loads/validates env (Zod + class-validator).
+- Provides typed access via `ConfigService` (Redis host/port, window size, LLM keys).
 
 ### 3.2 HealthModule
 - `HealthController` → `GET /health` (used by Docker healthcheck).
 
 ### 3.3 TransportModule
 - **Controller:** `POST /events` receives a normalized `MessageReceivedDto`.  
-- **Guards/Pipes:** optional allow‑list guard for `ALLOWED_CHAT_ID`; validation pipe for DTOs.  
-- **Service (optional):** thin façade to call the orchestrator (keeps controller ultra‑thin).
+- **Guards/Pipes:** validation pipe for DTOs (chat allow-list enforced in adapters).  
+- **Service (optional):** thin façade to call the orchestrator (keeps controller ultra-thin).
 
 ### 3.4 OrchestratorModule
 - **Service:** `OrchestratorService` — the application boundary. It:
@@ -243,7 +243,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 
 **Important env keys**
 _(Agent secrets live in `infra/.agent-server.env`; Telegram adapter keys go in `infra/.telegram.env`.)_
-- `TG_BOT_TOKEN`, `ALLOWED_CHAT_IDS`
+- `TG_BOT_TOKEN`, `ALLOWED_CHAT_IDS` (adapter-side chat allow-list)
 - `OPENAI_API_KEY`, `LLM_MODEL`
 - `REDIS_HOST=redis`, `REDIS_PORT=6379`, `MEM_WINDOW_SIZE=15`, `HANDLE_TTL_SECONDS=7200`
 - `AGENT_BASE_URL=http://agent-server:3000` (adapter → agent)
@@ -273,7 +273,7 @@ _Set `LLM_MODEL` in `.agent-server.env` to pick the LangGraph planner model (com
 
 ## 9) Security & Reliability Notes
 
-- **Allow‑list** chat IDs in the transport controller guard (single‑user system).  
+- **Allow-list** chat IDs inside the Telegram adapter (single-user system).  
 - **Validate tool inputs** (never pass LLM JSON straight to HTTP/DB).  
 - **Timeouts/retries** for external APIs.  
 - **Structured logging** of tool calls (args → result → elapsed).  

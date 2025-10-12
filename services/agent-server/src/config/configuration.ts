@@ -6,11 +6,6 @@ const parseNumber = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const trimOrNull = (value: string | undefined): string | null => {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
-};
-
 export default (): AppConfig => ({
   app: {
     port: parseNumber(process.env.PORT, 3000),
@@ -22,9 +17,6 @@ export default (): AppConfig => ({
   memory: {
     windowSize: parseNumber(process.env.MEM_WINDOW_SIZE, 15),
     handleTtlSeconds: parseNumber(process.env.HANDLE_TTL_SECONDS, 7200),
-  },
-  security: {
-    allowedChatId: trimOrNull(process.env.ALLOWED_CHAT_ID),
   },
   ai: {
     apiKey: process.env.OPENAI_API_KEY ?? '',
