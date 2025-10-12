@@ -87,7 +87,7 @@ Transport concerns (webhooks, polling, auth, rate limits) are isolated. The agen
 
 ### 3.7 MonicaModule (integrations)
 - Provides `MonicaClient` (REST wrapper with auth + pagination helpers).
-- Exposes typed services for CRM features (reminders + contacts, notes next).
+- Exposes typed services for CRM features (reminders, contacts, notes).
 - Shared across tools so orchestrator and future transports can reuse the same adapter.
 
 ### 3.8 CommonModule
@@ -307,6 +307,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - [x] Add Contacts tool (create, lookup, set birthday) and wire LangGraph handles.  
 - [x] Introduce Monica API connector with reminders pagination helpers.  
 - [x] Implement Monica contacts service (list/get/search/update/delete).  
+- [x] Implement Monica notes service (list/contact notes/CRUD).  
 - [ ] Bring up `docker compose up -d --build` and test `/health` and a hello flow.  
 
 ---
@@ -321,11 +322,12 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - Added structured logging interceptor and global exception formatting.
 - Introduced Monica connector module with reminders fetch + digest helpers.
 - Added Monica contacts service (list/get/search/update/delete + career updates).
+- Added Monica notes service (list, per-contact, CRUD with favorites support).
 
 **Remaining (near-term)**
 - Flesh out contact repository persistence (beyond in-memory) and add list/search surfaces.
 - Expand orchestrator tests (unit + E2E) and add contract coverage for DTOs.
-- Extend Monica integrations to cover notes, people updates digest, and richer contact enrichment flows.
+- Extend Monica integrations to cover people updates digest and richer contact enrichment flows.
 - Wire Telegram adapter (grammY) service with new contacts-centric flows and smoke-test end to end.
 - Execute Docker Compose stack, verify `/health`, and add initial unit/E2E tests per testing strategy.
 

@@ -2,6 +2,7 @@ import {
   MonicaAccountReference,
   MonicaPaginatedResponse,
 } from '../monica-common.types';
+import { MonicaNote } from '../notes/monica-notes.types';
 
 export type MonicaContactsSort =
   | 'created_at'
@@ -144,19 +145,6 @@ export interface MonicaContactField {
   object: 'contactfield';
   content: string | null;
   contact_field_type: MonicaContactFieldType;
-  account: MonicaAccountReference;
-  contact: MonicaContactReference;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MonicaNote {
-  id: number;
-  object: 'note';
-  body: string;
-  is_favorited: boolean;
-  favorited_at: string | null;
-  url: string;
   account: MonicaAccountReference;
   contact: MonicaContactReference;
   created_at: string;
