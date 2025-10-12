@@ -1,7 +1,7 @@
-export interface MonicaRequestOptions {
+export interface MonicaRequestOptions<TBody = unknown> {
   query?: Record<string, string | number | boolean | undefined>;
   headers?: Record<string, string>;
-  body?: unknown;
+  body?: TBody;
 }
 
 export interface MonicaErrorEnvelope {

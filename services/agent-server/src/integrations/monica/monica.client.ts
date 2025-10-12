@@ -21,16 +21,45 @@ export class MonicaClient {
 
   async get<T>(
     path: string,
-    options: MonicaRequestOptions = {},
+    options: MonicaRequestOptions<never> = {},
   ): Promise<T | null> {
-    return this.request<T>('GET', path, options);
+    return this.request<T, never>('GET', path, options);
   }
 
-  private async request<T>(
+  async post<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options: MonicaRequestOptions<TBody> = {},
+  ): Promise<TResponse | null> {
+    return this.request<TResponse, TBody>('POST', path, {
+      ...options,
+      body,
+    });
+  }
+
+  async put<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options: MonicaRequestOptions<TBody> = {},
+  ): Promise<TResponse | null> {
+    return this.request<TResponse, TBody>('PUT', path, {
+      ...options,
+      body,
+    });
+  }
+
+  async delete<T>(
+    path: string,
+    options: MonicaRequestOptions<never> = {},
+  ): Promise<T | null> {
+    return this.request<T, never>('DELETE', path, options);
+  }
+
+  private async request<TResponse, TBody>(
     method: string,
     path: string,
-    options: MonicaRequestOptions,
-  ): Promise<T | null> {
+    options: MonicaRequestOptions<TBody>,
+  ): Promise<TResponse | null> {
     const url = this.buildUrl(path, options.query);
     const headers = this.buildHeaders(options.headers);
 
@@ -49,7 +78,7 @@ export class MonicaClient {
       return null;
     }
 
-    const data: T = await response.json();
+    const data: TResponse = await response.json();
     return data;
   }
 

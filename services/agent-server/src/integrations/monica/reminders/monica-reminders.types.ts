@@ -1,3 +1,5 @@
+import { MonicaPaginatedResponse } from '../monica-common.types';
+
 export interface MonicaReminderInformationDate {
   name: string;
   is_birthdate_approximate: string | null;
@@ -30,28 +32,7 @@ export interface MonicaReminder {
   updated_at: string;
 }
 
-export interface MonicaPaginationLinks {
-  first: string | null;
-  last: string | null;
-  prev: string | null;
-  next: string | null;
-}
-
-export interface MonicaPaginationMeta {
-  current_page: number;
-  from: number | null;
-  last_page: number;
-  path: string;
-  per_page: number;
-  to: number | null;
-  total: number;
-}
-
-export interface MonicaReminderListResponse {
-  data: MonicaReminder[];
-  links: MonicaPaginationLinks;
-  meta: MonicaPaginationMeta;
-}
+export type MonicaReminderListResponse = MonicaPaginatedResponse<MonicaReminder>;
 
 export interface ReminderDigestItem {
   reminderId: number;
@@ -59,3 +40,4 @@ export interface ReminderDigestItem {
   title: string;
   nextOccurrence: string | null;
 }
+
