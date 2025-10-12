@@ -21,7 +21,7 @@ export class MonicaClient {
 
   async get<T>(
     path: string,
-    options: MonicaRequestOptions<never> = {},
+    options?: MonicaRequestOptions<never, T>,
   ): Promise<T | null> {
     return this.request<T, never>('GET', path, options);
   }
@@ -29,10 +29,10 @@ export class MonicaClient {
   async post<TResponse, TBody>(
     path: string,
     body: TBody,
-    options: MonicaRequestOptions<TBody> = {},
+    options?: MonicaRequestOptions<TBody, TResponse>,
   ): Promise<TResponse | null> {
     return this.request<TResponse, TBody>('POST', path, {
-      ...options,
+      ...(options ?? {}),
       body,
     });
   }
@@ -40,17 +40,17 @@ export class MonicaClient {
   async put<TResponse, TBody>(
     path: string,
     body: TBody,
-    options: MonicaRequestOptions<TBody> = {},
+    options?: MonicaRequestOptions<TBody, TResponse>,
   ): Promise<TResponse | null> {
     return this.request<TResponse, TBody>('PUT', path, {
-      ...options,
+      ...(options ?? {}),
       body,
     });
   }
 
   async delete<T>(
     path: string,
-    options: MonicaRequestOptions<never> = {},
+    options?: MonicaRequestOptions<never, T>,
   ): Promise<T | null> {
     return this.request<T, never>('DELETE', path, options);
   }
@@ -58,16 +58,20 @@ export class MonicaClient {
   private async request<TResponse, TBody>(
     method: string,
     path: string,
-    options: MonicaRequestOptions<TBody>,
+    options?: MonicaRequestOptions<TBody, TResponse>,
   ): Promise<TResponse | null> {
-    const url = this.buildUrl(path, options.query);
-    const headers = this.buildHeaders(options.headers);
+    const effectiveOptions: MonicaRequestOptions<TBody, TResponse> =
+      options ?? {};
+    const url = this.buildUrl(path, effectiveOptions.query);
+    const headers = this.buildHeaders(effectiveOptions.headers);
 
     const response = await fetch(url, {
       method,
       headers,
       body:
-        options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        effectiveOptions.body !== undefined
+          ? JSON.stringify(effectiveOptions.body)
+          : undefined,
     });
 
     if (!response.ok) {
@@ -78,8 +82,14 @@ export class MonicaClient {
       return null;
     }
 
-    const data: TResponse = await response.json();
-    return data;
+    const payload: unknown = await response.json();
+    if (!effectiveOptions.parseResponse) {
+      throw new Error(
+        `Missing response parser for Monica ${method} ${path} request.`,
+      );
+    }
+
+    return effectiveOptions.parseResponse(payload);
   }
 
   private buildUrl(
@@ -142,14 +152,50 @@ export class MonicaClient {
   }
 
   private extractErrorMessage(payload: unknown): string | undefined {
-    if (typeof payload === 'object' && payload !== null && 'error' in payload) {
-      const envelope = payload as MonicaErrorEnvelope;
-      const error = envelope.error;
-      if (error && typeof error.message === 'string') {
-        return error.message;
-      }
+    if (!this.isMonicaErrorEnvelope(payload)) {
+      return undefined;
     }
 
-    return undefined;
+    const error = payload.error;
+    if (!error || typeof error.message !== 'string') {
+      return undefined;
+    }
+
+    return error.message;
+  }
+
+  /**
+   * Determines whether the payload matches the Monica error envelope structure.
+   *
+   * @param payload Response payload to inspect.
+   * @returns True when the payload includes a valid error envelope.
+   */
+  private isMonicaErrorEnvelope(
+    payload: unknown,
+  ): payload is MonicaErrorEnvelope {
+    if (!this.isRecord(payload) || !('error' in payload)) {
+      return false;
+    }
+
+    const errorValue = payload.error;
+    if (errorValue === undefined) {
+      return true;
+    }
+
+    if (!this.isRecord(errorValue)) {
+      return false;
+    }
+
+    const message = errorValue.message;
+    if (message !== undefined && typeof message !== 'string') {
+      return false;
+    }
+
+    const code = errorValue.error_code;
+    return code === undefined || code === null || typeof code === 'number';
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 }

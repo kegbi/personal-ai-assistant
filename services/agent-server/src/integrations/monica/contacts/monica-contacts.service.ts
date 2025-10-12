@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MonicaClient } from '../monica.client';
 import {
+  parseMonicaContactResponse,
+  parseMonicaContactsListResponse,
+  parseMonicaDeleteContactResponse,
+} from '../monica.guards';
+import {
   MonicaContact,
   MonicaContactResponse,
   MonicaContactsListResponse,
@@ -24,7 +29,7 @@ export class MonicaContactsService {
     const query = this.buildListQuery(params);
     const response = await this.monicaClient.get<MonicaContactsListResponse>(
       '/contacts',
-      { query },
+      { query, parseResponse: parseMonicaContactsListResponse },
     );
 
     if (!response) {
@@ -56,7 +61,7 @@ export class MonicaContactsService {
     const query = this.buildGetContactQuery(options);
     const response = await this.monicaClient.get<MonicaContactResponse>(
       `/contacts/${contactId}`,
-      { query },
+      { query, parseResponse: parseMonicaContactResponse },
     );
 
     if (!response) {
@@ -75,7 +80,9 @@ export class MonicaContactsService {
     const response = await this.monicaClient.put<
       MonicaContactResponse,
       MonicaUpdateContactPayload
-    >(`/contacts/${contactId}`, payload);
+    >(`/contacts/${contactId}`, payload, {
+      parseResponse: parseMonicaContactResponse,
+    });
 
     if (!response) {
       throw new Error(
@@ -93,7 +100,9 @@ export class MonicaContactsService {
     const response = await this.monicaClient.put<
       MonicaContactResponse,
       MonicaUpdateContactCareerPayload
-    >(`/contacts/${contactId}/work`, payload);
+    >(`/contacts/${contactId}/work`, payload, {
+      parseResponse: parseMonicaContactResponse,
+    });
 
     if (!response) {
       throw new Error(
@@ -108,6 +117,7 @@ export class MonicaContactsService {
     const response =
       await this.monicaClient.delete<MonicaDeleteContactResponse>(
         `/contacts/${contactId}`,
+        { parseResponse: parseMonicaDeleteContactResponse },
       );
 
     if (!response) {

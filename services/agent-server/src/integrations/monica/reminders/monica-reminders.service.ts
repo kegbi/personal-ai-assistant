@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MonicaClient } from '../monica.client';
+import { parseMonicaReminderListResponse } from '../monica.guards';
 import {
   MonicaReminder,
   MonicaReminderListResponse,
@@ -26,6 +27,7 @@ export class MonicaRemindersService {
             limit: this.pageSize,
             page,
           },
+          parseResponse: parseMonicaReminderListResponse,
         },
       );
 

@@ -9,27 +9,91 @@ import {
   RedisSection,
 } from './config.types';
 
+type ConfigSectionGuard<TKey extends keyof AppConfig> = (
+  value: unknown,
+) => value is AppConfig[TKey];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const isAppSection: ConfigSectionGuard<'app'> = (
+  value: unknown,
+): value is AppConfig['app'] => isRecord(value) && isNumber(value.port);
+
+const isRedisSection: ConfigSectionGuard<'redis'> = (
+  value: unknown,
+): value is AppConfig['redis'] =>
+  isRecord(value) && isString(value.host) && isNumber(value.port);
+
+const isMemorySection: ConfigSectionGuard<'memory'> = (
+  value: unknown,
+): value is AppConfig['memory'] =>
+  isRecord(value) &&
+  isNumber(value.windowSize) &&
+  isNumber(value.handleTtlSeconds);
+
+const isAiSection: ConfigSectionGuard<'ai'> = (
+  value: unknown,
+): value is AppConfig['ai'] =>
+  isRecord(value) && isString(value.apiKey) && isString(value.model);
+
+const isMonicaSection: ConfigSectionGuard<'monica'> = (
+  value: unknown,
+): value is AppConfig['monica'] =>
+  isRecord(value) &&
+  isString(value.url) &&
+  isString(value.token) &&
+  isString(value.websiteUrl);
+
 @Injectable()
 export class AppConfigService {
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}
 
   get app(): AppSection {
-    return this.configService.get<AppSection>('app', { infer: true });
+    return this.readSection('app', isAppSection);
   }
 
   get redis(): RedisSection {
-    return this.configService.get<RedisSection>('redis', { infer: true });
+    return this.readSection('redis', isRedisSection);
   }
 
   get memory(): MemorySection {
-    return this.configService.get<MemorySection>('memory', { infer: true });
+    return this.readSection('memory', isMemorySection);
   }
 
   get ai(): AiSection {
-    return this.configService.get<AiSection>('ai', { infer: true });
+    return this.readSection('ai', isAiSection);
   }
 
   get monica(): MonicaSection {
-    return this.configService.get<MonicaSection>('monica', { infer: true });
+    return this.readSection('monica', isMonicaSection);
+  }
+
+  /**
+   * Retrieves and validates a configuration section ensuring expected shape.
+   *
+   * @param key Configuration key to resolve.
+   * @param guard Type guard that confirms the resolved value matches the expected schema.
+   * @throws Error when the configuration section is missing or malformed.
+   * @returns Strongly typed configuration section.
+   */
+  private readSection<TKey extends keyof AppConfig>(
+    key: TKey,
+    guard: ConfigSectionGuard<TKey>,
+  ): AppConfig[TKey] {
+    const rawSection: unknown = this.configService.get<AppConfig[TKey]>(key, {
+      infer: true,
+    });
+
+    if (!guard(rawSection)) {
+      throw new Error(`Invalid ${String(key)} configuration section.`);
+    }
+
+    return rawSection;
   }
 }

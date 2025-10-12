@@ -25,7 +25,7 @@ export class MessageReceivedDto {
   @IsBoolean()
   isCommand?: boolean;
 
-  @ValidateIf((o) => o.isCommand)
+  @ValidateIf((dto: MessageReceivedDto) => dto.isCommand === true)
   @IsString()
   command?: string;
 

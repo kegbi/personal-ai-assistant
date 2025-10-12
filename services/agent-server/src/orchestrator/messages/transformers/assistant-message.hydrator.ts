@@ -14,6 +14,8 @@ interface NormalizedAssistantMeta {
   readonly responseMetadata?: Record<string, unknown>;
 }
 
+type ToolCallArgs = Record<string, unknown> & { raw?: unknown };
+
 /**
  * Restores and serialises assistant messages, normalising tool-call metadata across legacy shapes.
  */
@@ -260,23 +262,23 @@ export class AssistantMessageHydrator {
     return toolCall;
   }
 
-  private coerceToolArgs(value: unknown): ToolCall['args'] | null {
+  private coerceToolArgs(value: unknown): ToolCallArgs | null {
     if (value === null || value === undefined) {
       return {};
     }
 
     if (typeof value === 'string') {
       try {
-        const parsed = JSON.parse(value);
+        const parsed: unknown = JSON.parse(value);
         if (isRecord(parsed)) {
           return this.cloneIntoArgs(parsed);
         }
 
-        const args: ToolCall['args'] = {};
+        const args: ToolCallArgs = {};
         args.raw = parsed;
         return args;
       } catch {
-        const args: ToolCall['args'] = {};
+        const args: ToolCallArgs = {};
         args.raw = value;
         return args;
       }
@@ -286,16 +288,16 @@ export class AssistantMessageHydrator {
       return this.cloneIntoArgs(value);
     }
 
-    const args: ToolCall['args'] = {};
+    const args: ToolCallArgs = {};
     args.raw = value;
     return args;
   }
 
-  private cloneIntoArgs(source: Record<string, unknown>): ToolCall['args'] {
-    const target: ToolCall['args'] = {};
+  private cloneIntoArgs(source: Record<string, unknown>): ToolCallArgs {
+    const target: ToolCallArgs = {};
     for (const [key, rawValue] of Object.entries(source)) {
       // ToolCall args allow arbitrary payloads; clone to avoid mutating shared references.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       target[key] = cloneValue(rawValue);
     }
 

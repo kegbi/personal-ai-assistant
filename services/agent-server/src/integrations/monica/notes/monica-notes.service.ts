@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MonicaClient } from '../monica.client';
 import {
+  parseMonicaDeleteNoteResponse,
+  parseMonicaNoteResponse,
+  parseMonicaNotesListResponse,
+} from '../monica.guards';
+import {
   MonicaCreateNotePayload,
   MonicaDeleteNoteResponse,
   MonicaListNotesParams,
@@ -22,7 +27,7 @@ export class MonicaNotesService {
     const query = this.buildPaginationQuery(params);
     const response = await this.monicaClient.get<MonicaNotesListResponse>(
       '/notes',
-      { query },
+      { query, parseResponse: parseMonicaNotesListResponse },
     );
 
     if (!response) {
@@ -39,7 +44,7 @@ export class MonicaNotesService {
     const query = this.buildPaginationQuery(params);
     const response = await this.monicaClient.get<MonicaNotesListResponse>(
       `/contacts/${contactId}/notes`,
-      { query },
+      { query, parseResponse: parseMonicaNotesListResponse },
     );
 
     if (!response) {
@@ -54,6 +59,7 @@ export class MonicaNotesService {
   async getNote(noteId: number): Promise<MonicaNote> {
     const response = await this.monicaClient.get<MonicaNoteResponse>(
       `/notes/${noteId}`,
+      { parseResponse: parseMonicaNoteResponse },
     );
 
     if (!response) {
@@ -67,7 +73,7 @@ export class MonicaNotesService {
     const response = await this.monicaClient.post<
       MonicaNoteResponse,
       MonicaCreateNotePayload
-    >('/notes', payload);
+    >('/notes', payload, { parseResponse: parseMonicaNoteResponse });
 
     if (!response) {
       throw new Error('Monica API returned no content while creating a note.');
@@ -84,7 +90,9 @@ export class MonicaNotesService {
     const response = await this.monicaClient.put<
       MonicaNoteResponse,
       MonicaUpdateNotePayload
-    >(`/notes/${noteId}`, payload);
+    >(`/notes/${noteId}`, payload, {
+      parseResponse: parseMonicaNoteResponse,
+    });
 
     if (!response) {
       throw new Error(
@@ -98,6 +106,7 @@ export class MonicaNotesService {
   async deleteNote(noteId: number): Promise<MonicaDeleteNoteResponse> {
     const response = await this.monicaClient.delete<MonicaDeleteNoteResponse>(
       `/notes/${noteId}`,
+      { parseResponse: parseMonicaDeleteNoteResponse },
     );
 
     if (!response) {

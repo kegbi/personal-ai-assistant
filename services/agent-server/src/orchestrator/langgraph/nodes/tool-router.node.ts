@@ -8,6 +8,17 @@ import { ContactsService } from '../../../tools/contacts/contacts.service';
 import { MemoryService } from '../../../memory/memory.service';
 import { RemindersService } from '../../../api/reminders/reminders.service';
 
+interface CreateContactArgs {
+  name: string;
+  birthday?: string;
+  contactId?: string;
+}
+
+interface SetBirthdayArgs {
+  contactId?: string;
+  birthday: string;
+}
+
 @Injectable()
 export class ToolRouterNode {
   private readonly logger = new Logger(ToolRouterNode.name);
@@ -21,7 +32,10 @@ export class ToolRouterNode {
   ) {
     this.tools = [
       tool(
-        async ({ name, birthday, contactId }, config?: RunnableConfig) => {
+        async (
+          { name, birthday, contactId }: CreateContactArgs,
+          config?: RunnableConfig,
+        ) => {
           try {
             const chatId = this.extractChatId(config);
             const contact = await this.contactsService.createContact(chatId, {
@@ -66,7 +80,7 @@ export class ToolRouterNode {
         },
       ),
       tool(
-        async (_args, config?: RunnableConfig) => {
+        async (_args: Record<string, never>, config?: RunnableConfig) => {
           try {
             this.extractChatId(config);
             const digest =
@@ -89,15 +103,19 @@ export class ToolRouterNode {
         },
       ),
       tool(
-        async ({ contactId, birthday }, config?: RunnableConfig) => {
+        async (
+          { contactId, birthday }: SetBirthdayArgs,
+          config?: RunnableConfig,
+        ) => {
           try {
             const chatId = this.resolveContactChatId(config);
-            const targetId =
-              contactId?.trim() ||
-              ((await this.memoryService.getHandle(
-                chatId,
-                'last_contact_id',
-              )) as string | undefined);
+            const recentHandle = await this.memoryService.getHandle(
+              chatId,
+              'last_contact_id',
+            );
+            const recentContactId =
+              typeof recentHandle === 'string' ? recentHandle : undefined;
+            const targetId = contactId?.trim() || recentContactId;
 
             if (!targetId) {
               return 'No contact id provided and no recent contact is known.';
@@ -147,7 +165,11 @@ export class ToolRouterNode {
     config?: RunnableConfig,
   ): Promise<Partial<typeof MessagesAnnotation.State>> {
     try {
-      return await this.toolNode.invoke(input, config);
+      const result: unknown = await this.toolNode.invoke(input, config);
+      if (!this.isPartialMessagesState(result)) {
+        throw new Error('Tool node returned an invalid state payload.');
+      }
+      return result;
     } catch (error) {
       this.logger.error(
         'Tool execution failed',
@@ -158,8 +180,13 @@ export class ToolRouterNode {
   }
 
   private extractChatId(config?: RunnableConfig): string {
-    const chatId = config?.configurable?.chatId;
-    if (!chatId || typeof chatId !== 'string') {
+    const configurable = config?.configurable;
+    const chatId =
+      this.isRecord(configurable) && typeof configurable.chatId === 'string'
+        ? configurable.chatId
+        : undefined;
+
+    if (!chatId) {
       throw new Error('chatId missing in tool invocation context');
     }
     return chatId;
@@ -167,5 +194,21 @@ export class ToolRouterNode {
 
   private resolveContactChatId(config?: RunnableConfig): string {
     return this.extractChatId(config);
+  }
+
+  /**
+   * Verifies the tool execution output is a partial LangGraph messages state.
+   *
+   * @param value Candidate value returned by the tool router.
+   * @returns True when the payload is a non-null record.
+   */
+  private isPartialMessagesState(
+    value: unknown,
+  ): value is Partial<typeof MessagesAnnotation.State> {
+    return this.isRecord(value);
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 }

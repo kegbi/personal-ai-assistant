@@ -12,28 +12,25 @@ export class ContactsRepository {
   private readonly contacts = new Map<string, Map<string, ContactRecord>>();
 
   // TODO: replace with persistent storage
-  async save(contact: ContactRecord): Promise<ContactRecord> {
+  save(contact: ContactRecord): Promise<ContactRecord> {
     const byChat =
       this.contacts.get(contact.chatId) ?? new Map<string, ContactRecord>();
     byChat.set(contact.id, contact);
     this.contacts.set(contact.chatId, byChat);
-    return contact;
+    return Promise.resolve(contact);
   }
 
-  async findById(
-    chatId: string,
-    id: string,
-  ): Promise<ContactRecord | undefined> {
+  findById(chatId: string, id: string): Promise<ContactRecord | undefined> {
     const byChat = this.contacts.get(chatId);
-    return byChat?.get(id);
+    return Promise.resolve(byChat?.get(id));
   }
 
-  async list(chatId: string): Promise<ContactRecord[]> {
+  list(chatId: string): Promise<ContactRecord[]> {
     const byChat = this.contacts.get(chatId);
     if (!byChat) {
-      return [];
+      return Promise.resolve([]);
     }
 
-    return Array.from(byChat.values());
+    return Promise.resolve(Array.from(byChat.values()));
   }
 }
