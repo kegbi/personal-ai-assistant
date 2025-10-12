@@ -9,7 +9,7 @@
 
 ## 1) Executive Summary
 
-We are building a modular AI agent that receives user messages from **Telegram**, plans actions using **LangGraph**, executes domain **tools** (e.g., crypto quotes, contacts CRUD), and replies. The system intentionally keeps persistence **minimal** (Redis only) and separates **transport adapters** from the **agent server** so we can add Matrix (or any other chat) later without touching the core.
+We are building a modular AI agent that receives user messages from **Telegram**, plans actions using **LangGraph**, executes domain **tools** (e.g., contacts CRUD today, extensible later), and replies. The system intentionally keeps persistence **minimal** (Redis only) and separates **transport adapters** from the **agent server** so we can add Matrix (or any other chat) later without touching the core.
 
 **Key decisions**
 - **NestJS** for clean layered architecture and DI.
@@ -37,7 +37,7 @@ User (Telegram)
    ▼
 [Redis 8]
    │
-   ├─ Tools call external APIs (e.g., crypto quotes)
+   ├─ Tools manage chat-scoped data (e.g., contacts)
    └─ Replies returned to adapter → user
 ```
 
@@ -79,12 +79,10 @@ Transport concerns (webhooks, polling, auth, rate limits) are isolated. The agen
 - Policies (window size, TTL) read from config.
 
 ### 3.6 ToolsModule (domain tools)
-- **quotes/**  
-  - `QuotesModule` → `QuotesService` (pure logic) + `QuotesClient` (HTTP).  
 - **contacts/**  
-  - `ContactsModule` → `ContactsService` (createContact, setBirthday).  
-  - Repo can be in‑memory for MVP, DB later.
-- Tools expose **typed methods**; LangGraph nodes call them via DI. No Telegram/Nest specifics leak into tool code.
+  - `ContactsModule` → `ContactsService` (createContact, setBirthday, lookup).  
+  - Repository is in-memory for now (chat-scoped), swappable for DB later.
+- Tools expose **typed methods**; LangGraph nodes call them via DI. No transport-specific logic leaks into tool code.
 
 ### 3.7 CommonModule
 - Cross‑cutting concerns: logging interceptor, exception filter, shared types/utilities.
@@ -184,10 +182,6 @@ services/
    │  │
    │  ├─ tools/
    │  │  ├─ tools.module.ts
-   │  │  ├─ quotes/
-   │  │  │  ├─ quotes.module.ts
-   │  │  │  ├─ quotes.service.ts
-   │  │  │  └─ quotes.client.ts
    │  │  └─ contacts/
    │  │     ├─ contacts.module.ts
    │  │     ├─ contacts.service.ts
@@ -242,7 +236,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - **Unit (Nest/Jest):**  
   - `orchestrator.service.spec.ts`: plans tool calls correctly.  
   - `memory.service.spec.ts`: window/handles TTL behavior.  
-  - `quotes.service.spec.ts`: HTTP client and retries.
+  - `contacts.service.spec.ts`: creation/update flows and handle propagation.
 
 - **Adapter (Vitest):**  
   - Normalize Telegram updates → DTO; command parsing; polling loop.
@@ -294,8 +288,8 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - [ ] Fill `infra/.env` with tokens and keys.  
 - [x] Implement DTOs in agent `transport/dto`.  
 - [x] Scaffold Nest modules and empty services/controllers.  
-- [ ] Implement `MemoryService` (Redis) and plug into `OrchestratorService`. _(In-memory placeholder is wired; replace with Redis client and persistence.)_  
-- [x] Add 2 tools: Quotes (HTTP) and Contacts (in‑memory). _(Scaffolded modules exist; flesh out real integrations.)_  
+- [x] Implement `MemoryService` (Redis) and plug into `OrchestratorService`.  
+- [x] Add Contacts tool (create, lookup, set birthday) and wire LangGraph handles.  
 - [ ] Bring up `docker compose up -d --build` and test `/health` and a hello flow.  
 
 ---
@@ -304,13 +298,15 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 
 **Completed**
 - Bootstrap Nest server with Config, Common, Health, Transport, Orchestrator, Memory, and Tools modules wired end-to-end.
-- Added global validation (Zod-config + class-validator DTOs) and Request validation pipeline.
-- Scaffolded Quotes and Contacts tool modules plus LangGraph planner/router placeholders for future logic.
+- Added global validation (Zod-config + class-validator DTOs) and request validation pipeline.
+- Implemented Redis-backed `MemoryService` with window + handle helpers.
+- Built LangGraph planner/router with OpenAI planning and contact-management tools.
+- Added structured logging interceptor and global exception formatting.
 
 **Remaining (near-term)**
-- Replace in-memory `MemoryService` implementation with Redis-backed storage and finalize handle/window policies.
-- Build LangGraph workflow (planner → tool router → responder) using latest Context7 MCP docs and connect tool invocations.
-- Implement real Quotes HTTP client, Contacts state handling, logging interceptor, and exception formatting.
+- Flesh out contact repository persistence (beyond in-memory) and add list/search surfaces.
+- Expand orchestrator tests (unit + E2E) and add contract coverage for DTOs.
+- Wire Telegram adapter (grammY) service with new contacts-centric flows and smoke-test end to end.
 - Execute Docker Compose stack, verify `/health`, and add initial unit/E2E tests per testing strategy.
 
 ---

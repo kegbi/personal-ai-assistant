@@ -10,10 +10,13 @@ importers:
     dependencies:
       '@langchain/core':
         specifier: ^0.3.78
-        version: 0.3.78
+        version: 0.3.78(openai@5.12.2(zod@4.1.12))
       '@langchain/langgraph':
         specifier: ^0.4.9
-        version: 0.4.9(@langchain/core@0.3.78)(zod-to-json-schema@3.24.6(zod@4.1.12))
+        version: 0.4.9(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))(zod-to-json-schema@3.24.6(zod@4.1.12))
+      '@langchain/openai':
+        specifier: ^0.6.15
+        version: 0.6.15(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))
       '@nestjs/common':
         specifier: ^11.0.1
         version: 11.1.6(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -32,6 +35,9 @@ importers:
       class-validator:
         specifier: ^0.14.2
         version: 0.14.2
+      redis:
+        specifier: ^5.8.3
+        version: 5.8.3
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -688,6 +694,12 @@ packages:
       zod-to-json-schema:
         optional: true
 
+  '@langchain/openai@0.6.15':
+    resolution: {integrity: sha512-eMxTujxuK7ioOh3EyH/Z/vCbo7PbfjVG/dHjN3o6++WIrM9q0KkZCtp9i68uuSijVJYLDYhQJ0F79S03X44Cig==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@langchain/core': '>=0.3.68 <0.4.0'
+
   '@lukeed/csprng@1.1.0':
     resolution: {integrity: sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA==}
     engines: {node: '>=8'}
@@ -800,6 +812,34 @@ packages:
   '@pkgr/core@0.2.9':
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
+
+  '@redis/bloom@5.8.3':
+    resolution: {integrity: sha512-1eldTzHvdW3Oi0TReb8m1yiFt8ZwyF6rv1NpZyG5R4TpCwuAdKQetBKoCw7D96tNFgsVVd6eL+NaGZZCqhRg4g==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      '@redis/client': ^5.8.3
+
+  '@redis/client@5.8.3':
+    resolution: {integrity: sha512-MZVUE+l7LmMIYlIjubPosruJ9ltSLGFmJqsXApTqPLyHLjsJUSAbAJb/A3N34fEqean4ddiDkdWzNu4ZKPvRUg==}
+    engines: {node: '>= 18'}
+
+  '@redis/json@5.8.3':
+    resolution: {integrity: sha512-DRR09fy/u8gynHGJ4gzXYeM7D8nlS6EMv5o+h20ndTJiAc7RGR01fdk2FNjnn1Nz5PjgGGownF+s72bYG4nZKQ==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      '@redis/client': ^5.8.3
+
+  '@redis/search@5.8.3':
+    resolution: {integrity: sha512-EMIvEeGRR2I0BJEz4PV88DyCuPmMT1rDtznlsHY3cKSDcc9vj0Q411jUnX0iU2vVowUgWn/cpySKjpXdZ8m+5g==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      '@redis/client': ^5.8.3
+
+  '@redis/time-series@5.8.3':
+    resolution: {integrity: sha512-5Jwy3ilsUYQjzpE7WZ1lEeG1RkqQ5kHtwV1p8yxXHSEmyUbC/T/AVgyjMcm52Olj/Ov/mhDKjx6ndYUi14bXsw==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      '@redis/client': ^5.8.3
 
   '@sinclair/typebox@0.34.41':
     resolution: {integrity: sha512-6gS8pZzSXdyRHTIqoqSVknxolr1kzfy4/CeDnrzsVz8TTIWUbOBr6gnzOmTYJ3eXQNh4IYHIGi5aIL7sOZ2G/g==}
@@ -1411,6 +1451,10 @@ packages:
   clone@1.0.4:
     resolution: {integrity: sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg==}
     engines: {node: '>=0.8'}
+
+  cluster-key-slot@1.1.2:
+    resolution: {integrity: sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA==}
+    engines: {node: '>=0.10.0'}
 
   co@4.6.0:
     resolution: {integrity: sha512-QVb0dM5HvG+uaxitm8wONl7jltx8dqhfU33DcqtOZcLSVIKSDDLDi7+0LbAKiyI8hD9u42m2YxXSkMGWThaecQ==}
@@ -2465,6 +2509,18 @@ packages:
     resolution: {integrity: sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==}
     engines: {node: '>=6'}
 
+  openai@5.12.2:
+    resolution: {integrity: sha512-xqzHHQch5Tws5PcKR2xsZGX9xtch+JQFz5zb14dGqlshmmDAFBFEWmeIpf7wVqWV+w7Emj7jRgkNJakyKE0tYQ==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -2635,6 +2691,10 @@ packages:
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
+
+  redis@5.8.3:
+    resolution: {integrity: sha512-MfSrfV6+tEfTw8c4W0yFp6XWX8Il4laGU7Bx4kvW4uiYM1AuZ3KGqEGt1LdQHeD1nEyLpIWetZ/SpY3kkbgrYw==}
+    engines: {node: '>= 18'}
 
   reflect-metadata@0.2.2:
     resolution: {integrity: sha512-urBwgfrvVP/eAyXx4hluJivBKzuEbSQs9rKWCrCkbSxNv8mxPcUZKeuoF3Uy4mJl3Lwprp6yy5/39VWigZ4K6Q==}
@@ -3885,14 +3945,14 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@langchain/core@0.3.78':
+  '@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       ansi-styles: 5.2.0
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.21
-      langsmith: 0.3.73
+      langsmith: 0.3.73(openai@5.12.2(zod@4.1.12))
       mustache: 4.2.0
       p-queue: 6.6.2
       p-retry: 4.6.2
@@ -3905,25 +3965,25 @@ snapshots:
       - '@opentelemetry/sdk-trace-base'
       - openai
 
-  '@langchain/langgraph-checkpoint@0.1.1(@langchain/core@0.3.78)':
+  '@langchain/langgraph-checkpoint@0.1.1(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))':
     dependencies:
-      '@langchain/core': 0.3.78
+      '@langchain/core': 0.3.78(openai@5.12.2(zod@4.1.12))
       uuid: 10.0.0
 
-  '@langchain/langgraph-sdk@0.1.9(@langchain/core@0.3.78)':
+  '@langchain/langgraph-sdk@0.1.9(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))':
     dependencies:
       '@types/json-schema': 7.0.15
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 9.0.1
     optionalDependencies:
-      '@langchain/core': 0.3.78
+      '@langchain/core': 0.3.78(openai@5.12.2(zod@4.1.12))
 
-  '@langchain/langgraph@0.4.9(@langchain/core@0.3.78)(zod-to-json-schema@3.24.6(zod@4.1.12))':
+  '@langchain/langgraph@0.4.9(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))(zod-to-json-schema@3.24.6(zod@4.1.12))':
     dependencies:
-      '@langchain/core': 0.3.78
-      '@langchain/langgraph-checkpoint': 0.1.1(@langchain/core@0.3.78)
-      '@langchain/langgraph-sdk': 0.1.9(@langchain/core@0.3.78)
+      '@langchain/core': 0.3.78(openai@5.12.2(zod@4.1.12))
+      '@langchain/langgraph-checkpoint': 0.1.1(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))
+      '@langchain/langgraph-sdk': 0.1.9(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))
       uuid: 10.0.0
       zod: 3.25.76
     optionalDependencies:
@@ -3931,6 +3991,15 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
+
+  '@langchain/openai@0.6.15(@langchain/core@0.3.78(openai@5.12.2(zod@4.1.12)))':
+    dependencies:
+      '@langchain/core': 0.3.78(openai@5.12.2(zod@4.1.12))
+      js-tiktoken: 1.0.21
+      openai: 5.12.2(zod@3.25.76)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - ws
 
   '@lukeed/csprng@1.1.0': {}
 
@@ -4073,6 +4142,26 @@ snapshots:
     optional: true
 
   '@pkgr/core@0.2.9': {}
+
+  '@redis/bloom@5.8.3(@redis/client@5.8.3)':
+    dependencies:
+      '@redis/client': 5.8.3
+
+  '@redis/client@5.8.3':
+    dependencies:
+      cluster-key-slot: 1.1.2
+
+  '@redis/json@5.8.3(@redis/client@5.8.3)':
+    dependencies:
+      '@redis/client': 5.8.3
+
+  '@redis/search@5.8.3(@redis/client@5.8.3)':
+    dependencies:
+      '@redis/client': 5.8.3
+
+  '@redis/time-series@5.8.3(@redis/client@5.8.3)':
+    dependencies:
+      '@redis/client': 5.8.3
 
   '@sinclair/typebox@0.34.41': {}
 
@@ -4747,6 +4836,8 @@ snapshots:
       wrap-ansi: 7.0.0
 
   clone@1.0.4: {}
+
+  cluster-key-slot@1.1.2: {}
 
   co@4.6.0: {}
 
@@ -5764,7 +5855,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  langsmith@0.3.73:
+  langsmith@0.3.73(openai@5.12.2(zod@4.1.12)):
     dependencies:
       '@types/uuid': 10.0.0
       chalk: 4.1.2
@@ -5773,6 +5864,8 @@ snapshots:
       p-retry: 4.6.2
       semver: 7.7.3
       uuid: 10.0.0
+    optionalDependencies:
+      openai: 5.12.2(zod@4.1.12)
 
   leven@3.1.0: {}
 
@@ -5945,6 +6038,15 @@ snapshots:
     dependencies:
       mimic-fn: 2.1.0
 
+  openai@5.12.2(zod@3.25.76):
+    optionalDependencies:
+      zod: 3.25.76
+
+  openai@5.12.2(zod@4.1.12):
+    optionalDependencies:
+      zod: 4.1.12
+    optional: true
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -6102,6 +6204,14 @@ snapshots:
       util-deprecate: 1.0.2
 
   readdirp@4.1.2: {}
+
+  redis@5.8.3:
+    dependencies:
+      '@redis/bloom': 5.8.3(@redis/client@5.8.3)
+      '@redis/client': 5.8.3
+      '@redis/json': 5.8.3(@redis/client@5.8.3)
+      '@redis/search': 5.8.3(@redis/client@5.8.3)
+      '@redis/time-series': 5.8.3(@redis/client@5.8.3)
 
   reflect-metadata@0.2.2: {}
 

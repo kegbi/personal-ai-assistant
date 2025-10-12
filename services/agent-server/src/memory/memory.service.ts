@@ -1,66 +1,83 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../config/config.service';
-import { REDIS_CLIENT } from './redis.provider';
+import { REDIS_CLIENT, type RedisClient } from './redis.provider';
 
-interface MemoryMessage {
+export interface MemoryMessage {
   role: 'user' | 'assistant' | 'system';
   content?: string;
   meta?: Record<string, unknown>;
 }
 
-interface HandleEntry {
-  value: unknown;
-  expiresAt?: number;
-}
-
 @Injectable()
 export class MemoryService {
-  private readonly windows = new Map<string, MemoryMessage[]>();
-  private readonly handles = new Map<string, Map<string, HandleEntry>>();
+  private readonly logger = new Logger(MemoryService.name);
 
   constructor(
-    @Inject(REDIS_CLIENT) private readonly redisClient: unknown,
+    @Inject(REDIS_CLIENT) private readonly redisClient: RedisClient,
     private readonly config: AppConfigService,
-  ) {
-    // prevent unused injection while Redis implementation is pending
-    void this.redisClient;
+  ) {}
+
+  private windowKey(chatId: string): string {
+    return `memory:window:${chatId}`;
   }
 
-  // TODO: replace in-memory store with Redis implementation
+  private handleKey(chatId: string, key: string): string {
+    return `memory:handle:${chatId}:${key}`;
+  }
+
   async getWindow(chatId: string): Promise<MemoryMessage[]> {
-    return this.windows.get(chatId) ?? [];
+    const key = this.windowKey(chatId);
+    const entries = await this.redisClient.lRange(key, 0, -1);
+
+    if (!entries?.length) {
+      return [];
+    }
+
+    return entries
+      .map((item) => {
+        try {
+          return JSON.parse(item) as MemoryMessage;
+        } catch (error) {
+          const reason =
+            error instanceof Error ? error.message : JSON.stringify(error);
+          this.logger.warn(
+            `Failed to parse memory message for chat ${chatId}: ${reason}`,
+          );
+          return null;
+        }
+      })
+      .filter((item): item is MemoryMessage => item !== null);
   }
 
   async pushMessage(chatId: string, message: MemoryMessage): Promise<void> {
-    const window = this.windows.get(chatId) ?? [];
-    window.push(message);
-
+    const key = this.windowKey(chatId);
+    const serialized = JSON.stringify(message);
     const windowSize = this.config.memory.windowSize;
 
-    if (window.length > windowSize) {
-      window.shift();
-    }
-
-    this.windows.set(chatId, window);
+    await this.redisClient
+      .multi()
+      .rPush(key, serialized)
+      .lTrim(key, -windowSize, -1)
+      .exec();
   }
 
   async getHandle(chatId: string, key: string): Promise<unknown> {
-    const byChat = this.handles.get(chatId);
-    if (!byChat) {
+    const handleKey = this.handleKey(chatId, key);
+    const raw = await this.redisClient.get(handleKey);
+
+    if (raw === null) {
       return undefined;
     }
 
-    const entry = byChat.get(key);
-    if (!entry) {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      this.logger.warn(
+        `Failed to parse handle ${key} for chat ${chatId}: ${reason}`,
+      );
       return undefined;
     }
-
-    if (entry.expiresAt && entry.expiresAt < Date.now()) {
-      byChat.delete(key);
-      return undefined;
-    }
-
-    return entry.value;
   }
 
   async setHandle(
@@ -69,17 +86,47 @@ export class MemoryService {
     value: unknown,
     ttlSeconds?: number,
   ): Promise<void> {
-    const byChat = this.handles.get(chatId) ?? new Map<string, HandleEntry>();
+    const handleKey = this.handleKey(chatId, key);
+    const payload = JSON.stringify(value);
     const ttl =
-      ttlSeconds !== undefined ? ttlSeconds : this.config.memory.handleTtlSeconds;
-    const expiresAt = ttl ? Date.now() + ttl * 1000 : undefined;
+      ttlSeconds !== undefined
+        ? ttlSeconds
+        : this.config.memory.handleTtlSeconds;
 
-    byChat.set(key, { value, expiresAt });
-    this.handles.set(chatId, byChat);
+    if (ttl && ttl > 0) {
+      await this.redisClient.set(handleKey, payload, {
+        EX: ttl,
+      });
+    } else {
+      await this.redisClient.set(handleKey, payload);
+    }
   }
 
   async clear(chatId: string): Promise<void> {
-    this.windows.delete(chatId);
-    this.handles.delete(chatId);
+    const windowKey = this.windowKey(chatId);
+    await this.redisClient.del(windowKey);
+
+    const handleKeys: string[] = [];
+    const iterator = this.redisClient.scanIterator({
+      MATCH: `${this.handleKey(chatId, '*')}`,
+      COUNT: 50,
+    });
+
+    for await (const handleKey of iterator) {
+      let keyValue: string;
+      if (typeof handleKey === 'string') {
+        keyValue = handleKey;
+      } else if (handleKey instanceof Buffer) {
+        keyValue = handleKey.toString();
+      } else {
+        keyValue = String(handleKey);
+      }
+
+      handleKeys.push(keyValue);
+    }
+
+    if (handleKeys.length > 0) {
+      await this.redisClient.del(handleKeys);
+    }
   }
 }
