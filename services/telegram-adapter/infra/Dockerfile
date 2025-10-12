@@ -8,7 +8,7 @@ RUN npm i -g pnpm
 # Copy manifest and lockfiles
 COPY package.json pnpm-lock.yaml* .npmrc* ./
 # Use frozen lockfile only if it exists
-RUN pnpm install --dev
+RUN pnpm install
 
 COPY tsconfig*.json ./
 COPY src ./src
@@ -21,11 +21,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Install pnpm globally (no corepack) and set config for better peer resolution
-RUN npm i -g pnpm \
+RUN npm i -g pnpm
 
 COPY package.json pnpm-lock.yaml* .npmrc* ./
 # Use frozen lockfile only if it exists
-RUN pnpm install --prod
+RUN pnpm install
 
 COPY --from=build /app/dist ./dist
 

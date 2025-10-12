@@ -18,8 +18,8 @@ services:
       context: ../services/agent-server
       dockerfile: ./infra/Dockerfile
     env_file:
-      - ./.env            # общий .env для всех сервисов
-      - ./agent.env       # доп-переменные/оверрайды агента (опц.)
+      - ./.env
+      - ./agent.env
     environment:
       NODE_ENV: production
       TZ: Europe/Belgrade
@@ -29,13 +29,12 @@ services:
       REDIS_DB: 0
       MEM_WINDOW_SIZE: 15
       HANDLE_TTL_SECONDS: 7200
-      # LLM defaults (можно задать в .env)
       LLM_MODEL: ${LLM_MODEL:-gpt-5-thinking}
     depends_on:
       redis:
         condition: service_healthy
     ports:
-      - "3000:3000"       # удобно для /health в отладке; в проде можно убрать
+      - "45111:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 10s
@@ -45,30 +44,29 @@ services:
     networks:
       - appnet
 
-#  tg-adapter:
-#    build:
-#      context: ../services/telegram-adapter
-#      dockerfile: ./infra/Dockerfile
-#    env_file:
-#      - ./.env
-#      - ./telegram.env    # доп-переменные/оверрайды адаптера (опц.)
-#    environment:
-#      NODE_ENV: production
-#      TZ: Europe/Belgrade
-#      TG_MODE: polling               # фиксируем polling
-#      AGENT_BASE_URL: http://agent-server:3000
-#    depends_on:
-#      agent-server:
-#        condition: service_healthy
-#    # Порты НЕ публикуем в polling-режиме
-#    healthcheck:
-#      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health || echo ok"]
-#      interval: 15s
-#      timeout: 5s
-#      retries: 10
-#    restart: unless-stopped
-#    networks:
-#      - appnet
+  tg-adapter:
+    build:
+      context: ../services/telegram-adapter
+      dockerfile: ./infra/Dockerfile
+    env_file:
+      - ./.env
+      - ./telegram.env
+    environment:
+      NODE_ENV: production
+      TZ: Europe/Belgrade
+      TG_MODE: polling
+      AGENT_BASE_URL: http://agent-server:3000
+    depends_on:
+      agent-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health || echo ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - appnet
 
 volumes:
   redis-data:
