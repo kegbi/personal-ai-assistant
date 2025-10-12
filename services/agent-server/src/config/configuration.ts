@@ -1,4 +1,5 @@
 import { AppConfig } from './config.types';
+import { DEFAULT_LLM_MODEL, DEFAULT_REDIS_HOST } from './config.defaults';
 
 const parseNumber = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
@@ -15,7 +16,7 @@ export default (): AppConfig => ({
     port: parseNumber(process.env.PORT, 3000),
   },
   redis: {
-    host: process.env.REDIS_HOST ?? 'localhost',
+    host: process.env.REDIS_HOST ?? DEFAULT_REDIS_HOST,
     port: parseNumber(process.env.REDIS_PORT, 6379),
   },
   memory: {
@@ -27,7 +28,7 @@ export default (): AppConfig => ({
   },
   ai: {
     apiKey: process.env.OPENAI_API_KEY ?? '',
-    model: process.env.LLM_MODEL ?? 'gpt-4o-mini',
+    model: process.env.LLM_MODEL ?? DEFAULT_LLM_MODEL,
   },
   monica: {
     url: process.env.MONICA_API_URL ?? 'https://app.monicahq.com/api',

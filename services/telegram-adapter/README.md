@@ -4,7 +4,7 @@ Lightweight bridge between the Telegram Bot API and the NestJS agent server. It 
 
 ## Configuration
 
-Set the following environment variables (either via `infra/telegram.env` or your shell):
+Set the following environment variables (either via `infra/.telegram.env` or your shell):
 
 | Variable | Required | Description |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ The dev server uses long polling and logs each update. The health probe lives at
 
 `infra/docker-compose.yml` already defines an optional `tg-adapter` service. To enable it:
 
-1. Copy `infra/.env.example` (if present) into `.env` and add the Telegram variables.
+1. Copy `infra/.telegram.env.example` into `infra/.telegram.env` and add your Telegram variables.
 2. Uncomment the `tg-adapter` section in `docker-compose.yml`.
 3. Run `docker compose up -d --build`.
 

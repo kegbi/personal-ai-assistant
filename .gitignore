@@ -1,4 +1,4 @@
 .idea
 .env
-.agent.env
-telegram.env
+.agent-server.env
+.telegram.env

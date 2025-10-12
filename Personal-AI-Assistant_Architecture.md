@@ -137,9 +137,9 @@ It is fast, simple, resilient with AOF, and perfect for short‑lived context. N
 ```
 personal-ai-assistant/
 ├─ infra/
-│  ├─ .env.example
+│  ├─ .agent-server.env.example
 │  ├─ docker-compose.yml
-│  └─ telegram.env.example
+│  └─ .telegram.env.example
 ├─ services/
 │  ├─ agent-server/
 │  │  └─ infra/
@@ -242,12 +242,14 @@ services/
 _The compose file is already created in `infra/docker-compose.yml` (see repo); it wires `redis` → `agent-server` → `tg-adapter` with health checks and environment variables._
 
 **Important env keys**
+_(Agent secrets live in `infra/.agent-server.env`; Telegram adapter keys go in `infra/.telegram.env`.)_
 - `TG_BOT_TOKEN`, `ALLOWED_CHAT_ID`
 - `OPENAI_API_KEY`, `LLM_MODEL`
 - `REDIS_HOST=redis`, `REDIS_PORT=6379`, `MEM_WINDOW_SIZE=15`, `HANDLE_TTL_SECONDS=7200`
 - `AGENT_BASE_URL=http://agent-server:3000` (adapter → agent)
 - `MONICA_API_URL`, `MONICA_API_TOKEN` (OAuth token for Monica API access)
 - `MONICA_WEB_URL` (public Monica app base, used for human-facing links)
+_Set `LLM_MODEL` in `.agent-server.env` to pick the LangGraph planner model (compose defaults to `gpt-5-mini`)._
 
 ---
 
@@ -305,7 +307,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 
 ## 12) “Day‑1” Checklist
 
-- [ ] Fill `infra/.env` with tokens and keys.  
+- [ ] Fill `infra/.agent-server.env` with agent secrets (Monica, OpenAI, model).  
 - [x] Implement DTOs in agent `transport/dto`.  
 - [x] Scaffold Nest modules and empty services/controllers.  
 - [x] Implement `MemoryService` (Redis) and plug into `OrchestratorService`.  

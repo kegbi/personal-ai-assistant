@@ -19,7 +19,7 @@ services:
       dockerfile: ./infra/Dockerfile
     env_file:
       - ./.env
-      - ./agent.env
+      - ./.agent-server.env
     environment:
       NODE_ENV: production
       TZ: Europe/Belgrade
@@ -29,7 +29,7 @@ services:
       REDIS_DB: 0
       MEM_WINDOW_SIZE: 15
       HANDLE_TTL_SECONDS: 7200
-      LLM_MODEL: ${LLM_MODEL:-gpt-5-thinking}
+      LLM_MODEL: ${LLM_MODEL:-gpt-5-mini}
     depends_on:
       redis:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
       dockerfile: ./infra/Dockerfile
     env_file:
       - ./.env
-      - ./telegram.env
+      - ./.telegram.env
     environment:
       NODE_ENV: production
       TZ: Europe/Belgrade
