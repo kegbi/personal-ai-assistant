@@ -51,7 +51,7 @@ export class MonicaRemindersService {
       reminderId: reminder.id,
       contactName: this.buildContactName(reminder),
       title: reminder.title,
-      nextOccurrence: reminder.next_expected_date,
+      nextOccurrence: reminder.next_expected_date ?? null,
     }));
   }
 
@@ -70,3 +70,4 @@ export class MonicaRemindersService {
     return '[unknown contact]';
   }
 }
+

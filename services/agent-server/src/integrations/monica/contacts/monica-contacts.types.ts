@@ -18,16 +18,25 @@ export interface MonicaSpecialDate {
 
 export interface MonicaContactReference {
   id: number;
+  uuid?: string;
   object: 'contact';
   first_name: string | null;
   last_name: string | null;
   nickname: string | null;
   gender: string | null;
   is_partial: boolean;
+  is_active?: boolean;
   is_dead?: boolean;
+  is_starred?: boolean;
+  is_me?: boolean;
+  complete_name?: string | null;
+  initials?: string | null;
+  hash_id?: string;
+  url?: string;
   information?: {
     birthdate?: MonicaSpecialDate | null;
     deceased_date?: MonicaSpecialDate | null;
+    avatar?: MonicaAvatarInfo | null;
   };
   account?: MonicaAccountReference;
 }
@@ -40,6 +49,7 @@ export interface MonicaRelationshipSummary {
 export interface MonicaRelationshipContact {
   relationship: {
     id: number;
+    uuid?: string;
     name: string | null;
   };
   contact: MonicaContactReference;
@@ -66,12 +76,12 @@ export interface MonicaHowYouMet {
 }
 
 export interface MonicaContactInformation {
-  relationships?: MonicaContactRelationships;
+  relationships?: MonicaContactRelationships | null;
   dates?: {
     birthdate?: MonicaSpecialDate | null;
     deceased_date?: MonicaSpecialDate | null;
     first_met_date?: MonicaSpecialDate | null;
-  };
+  } | null;
   career?: {
     job: string | null;
     company: string | null;
@@ -91,6 +101,7 @@ export interface MonicaCountry {
 
 export interface MonicaAddress {
   id: number;
+  uuid?: string;
   object: 'address';
   name: string | null;
   street: string | null;
@@ -142,6 +153,7 @@ export interface MonicaContactFieldType {
 
 export interface MonicaContactField {
   id: number;
+  uuid?: string;
   object: 'contactfield';
   content: string | null;
   contact_field_type: MonicaContactFieldType;
@@ -153,6 +165,7 @@ export interface MonicaContactField {
 
 export interface MonicaContact {
   id: number;
+  uuid?: string;
   object: 'contact';
   hash_id?: string;
   first_name: string | null;
