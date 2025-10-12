@@ -30,7 +30,9 @@ export class MonicaRemindersService {
       );
 
       if (!response) {
-        throw new Error('Monica API returned no content while listing reminders.');
+        throw new Error(
+          'Monica API returned no content while listing reminders.',
+        );
       }
 
       reminders.push(...response.data);
@@ -70,4 +72,3 @@ export class MonicaRemindersService {
     return '[unknown contact]';
   }
 }
-

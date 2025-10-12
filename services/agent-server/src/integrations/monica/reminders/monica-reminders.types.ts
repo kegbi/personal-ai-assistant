@@ -22,7 +22,8 @@ export interface MonicaReminder {
   updated_at: string;
 }
 
-export type MonicaReminderListResponse = MonicaPaginatedResponse<MonicaReminder>;
+export type MonicaReminderListResponse =
+  MonicaPaginatedResponse<MonicaReminder>;
 
 export interface ReminderDigestItem {
   reminderId: number;

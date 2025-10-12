@@ -68,9 +68,7 @@ export class PlannerNode {
     }
   }
 
-  determineNext(
-    state: typeof MessagesAnnotation.State,
-  ): 'tool' | 'respond' {
+  determineNext(state: typeof MessagesAnnotation.State): 'tool' | 'respond' {
     const lastMessage = state.messages[state.messages.length - 1];
 
     if (isAIMessage(lastMessage) && lastMessage.tool_calls?.length) {

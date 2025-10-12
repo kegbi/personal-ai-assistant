@@ -182,7 +182,10 @@ export interface MonicaContact {
   is_dead: boolean;
   is_me?: boolean;
   last_called: string | null;
-  last_activity_together: string | { date: string; timezone_type: number; timezone: string } | null;
+  last_activity_together:
+    | string
+    | { date: string; timezone_type: number; timezone: string }
+    | null;
   stay_in_touch_frequency: number | null;
   stay_in_touch_trigger_date: string | null;
   information?: MonicaContactInformation;

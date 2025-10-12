@@ -30,7 +30,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const message =
       typeof errorResponse === 'string'
         ? errorResponse
-        : (errorResponse as Record<string, unknown>).message ?? 'Internal server error';
+        : ((errorResponse as Record<string, unknown>).message ??
+          'Internal server error');
 
     this.logger.error(
       `${request?.method ?? 'unknown'} ${request?.url ?? 'unknown'} -> ${status}`,

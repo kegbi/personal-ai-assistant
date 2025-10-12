@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { ToolCall } from '@langchain/core/messages/tool';
 import { AppConfigService } from '../config/config.service';
 import { REDIS_CLIENT, type RedisClient } from './redis.provider';
 
@@ -6,7 +7,7 @@ export interface MemoryMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content?: string;
   meta?: Record<string, unknown>;
-  toolCalls?: unknown[];
+  toolCalls?: ToolCall[];
 }
 
 @Injectable()
@@ -73,7 +74,8 @@ export class MemoryService {
     try {
       return JSON.parse(raw) as unknown;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : JSON.stringify(error);
+      const reason =
+        error instanceof Error ? error.message : JSON.stringify(error);
       this.logger.warn(
         `Failed to parse handle ${key} for chat ${chatId}: ${reason}`,
       );

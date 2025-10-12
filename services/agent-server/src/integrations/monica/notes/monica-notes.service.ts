@@ -87,7 +87,9 @@ export class MonicaNotesService {
     >(`/notes/${noteId}`, payload);
 
     if (!response) {
-      throw new Error(`Monica API returned no content while updating note ${noteId}.`);
+      throw new Error(
+        `Monica API returned no content while updating note ${noteId}.`,
+      );
     }
 
     return response.data;
@@ -99,7 +101,9 @@ export class MonicaNotesService {
     );
 
     if (!response) {
-      throw new Error(`Monica API returned no response while deleting note ${noteId}.`);
+      throw new Error(
+        `Monica API returned no response while deleting note ${noteId}.`,
+      );
     }
 
     return response;

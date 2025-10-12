@@ -60,7 +60,9 @@ export class MonicaContactsService {
     );
 
     if (!response) {
-      throw new Error(`Monica API returned no content for contact ${contactId}.`);
+      throw new Error(
+        `Monica API returned no content for contact ${contactId}.`,
+      );
     }
 
     return response.data;
@@ -76,7 +78,9 @@ export class MonicaContactsService {
     >(`/contacts/${contactId}`, payload);
 
     if (!response) {
-      throw new Error(`Monica API returned no content while updating contact ${contactId}.`);
+      throw new Error(
+        `Monica API returned no content while updating contact ${contactId}.`,
+      );
     }
 
     return response.data;
@@ -101,12 +105,15 @@ export class MonicaContactsService {
   }
 
   async removeContact(contactId: number): Promise<MonicaDeleteContactResponse> {
-    const response = await this.monicaClient.delete<MonicaDeleteContactResponse>(
-      `/contacts/${contactId}`,
-    );
+    const response =
+      await this.monicaClient.delete<MonicaDeleteContactResponse>(
+        `/contacts/${contactId}`,
+      );
 
     if (!response) {
-      throw new Error(`Monica API returned no response while deleting contact ${contactId}.`);
+      throw new Error(
+        `Monica API returned no response while deleting contact ${contactId}.`,
+      );
     }
 
     return response;

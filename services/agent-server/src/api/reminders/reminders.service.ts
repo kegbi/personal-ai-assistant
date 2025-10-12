@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { differenceInCalendarDays, format, isSameDay, parseISO, startOfDay } from 'date-fns';
+import {
+  differenceInCalendarDays,
+  format,
+  isSameDay,
+  parseISO,
+  startOfDay,
+} from 'date-fns';
 import { AppConfigService } from '../../config/config.service';
 import { MonicaRemindersService } from '../../integrations/monica/reminders/monica-reminders.service';
 import { ReminderItem, RemindersMessageResponse } from './reminders.types';
@@ -35,7 +41,8 @@ export class RemindersService {
       );
       const fallbackName = fallbackNameParts.join(' ').trim();
       const fullName =
-        contact.complete_name ?? (fallbackName.length > 0 ? fallbackName : null);
+        contact.complete_name ??
+        (fallbackName.length > 0 ? fallbackName : null);
 
       const apiUrl = contact.url ?? null;
       const websiteUrl =
@@ -105,7 +112,11 @@ export class RemindersService {
     const todayLabel = format(today, 'dd-MM-yyyy');
 
     const todaysReminders: ReminderItem[] = [];
-    const upcomingReminders: Array<{ date: Date; item: ReminderItem; originalIndex: number }> = [];
+    const upcomingReminders: Array<{
+      date: Date;
+      item: ReminderItem;
+      originalIndex: number;
+    }> = [];
 
     reminders.forEach((reminder, index) => {
       const eventDate = this.resolveReminderDate(reminder);
@@ -122,7 +133,11 @@ export class RemindersService {
 
       const diff = differenceInCalendarDays(normalizedDate, today);
       if (diff >= 1 && diff <= 3) {
-        upcomingReminders.push({ date: normalizedDate, item: reminder, originalIndex: index });
+        upcomingReminders.push({
+          date: normalizedDate,
+          item: reminder,
+          originalIndex: index,
+        });
       }
     });
 
@@ -137,7 +152,9 @@ export class RemindersService {
     const upcomingByDate: Array<{ label: string; items: ReminderItem[] }> = [];
     upcomingReminders.forEach(({ date, item }) => {
       const label = format(date, 'dd-MM-yyyy');
-      const existingGroup = upcomingByDate.find((group) => group.label === label);
+      const existingGroup = upcomingByDate.find(
+        (group) => group.label === label,
+      );
       if (existingGroup) {
         existingGroup.items.push(item);
         return;

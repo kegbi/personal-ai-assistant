@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { MessagesAnnotation, START, END, StateGraph } from '@langchain/langgraph';
+import {
+  MessagesAnnotation,
+  START,
+  END,
+  StateGraph,
+} from '@langchain/langgraph';
 import { PlannerNode } from './nodes/planner.node';
 import { ToolRouterNode } from './nodes/tool-router.node';
 
@@ -39,6 +44,6 @@ export class GraphFactory {
       this.compiledGraph = workflow.compile() as unknown as CompiledGraph;
     }
 
-    return this.compiledGraph as CompiledGraph;
+    return this.compiledGraph;
   }
 }

@@ -11,9 +11,7 @@ import {
 
 @Injectable()
 export class AppConfigService {
-  constructor(
-    private readonly configService: ConfigService<AppConfig, true>,
-  ) {}
+  constructor(private readonly configService: ConfigService<AppConfig, true>) {}
 
   get app(): AppSection {
     return this.configService.get<AppSection>('app', { infer: true });

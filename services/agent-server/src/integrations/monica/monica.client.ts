@@ -142,11 +142,7 @@ export class MonicaClient {
   }
 
   private extractErrorMessage(payload: unknown): string | undefined {
-    if (
-      typeof payload === 'object' &&
-      payload !== null &&
-      'error' in payload
-    ) {
+    if (typeof payload === 'object' && payload !== null && 'error' in payload) {
       const envelope = payload as MonicaErrorEnvelope;
       const error = envelope.error;
       if (error && typeof error.message === 'string') {
