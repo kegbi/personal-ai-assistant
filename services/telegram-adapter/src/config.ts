@@ -37,7 +37,7 @@ const configSchema = z.object({
   agentAuthToken: z.string().min(1).optional(),
   allowedChatIds: z.array(z.string().min(1)).default([]),
   longPollingTimeoutMs: z.number().int().positive().default(30_000),
-  agentTimeoutMs: z.number().int().positive().default(15_000),
+  agentTimeoutMs: z.number().int().positive().default(45_000),
   healthPort: z.number().int().positive().default(8081),
   dropPendingUpdates: z.boolean().default(true),
   mode: z.literal('polling'),

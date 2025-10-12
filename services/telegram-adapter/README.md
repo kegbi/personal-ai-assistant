@@ -13,7 +13,7 @@ Set the following environment variables (either via `infra/.telegram.env` or you
 | `AGENT_AUTH_TOKEN` | ⭕ | Optional bearer token if the agent requires auth. `AGENT_API_KEY` is also recognised. |
 | `ALLOWED_CHAT_IDS` | ⭕ | Comma-separated list of allowed private chat/user IDs. |
 | `TG_POLLING_TIMEOUT_MS` | ⭕ (default `30000`) | Long-polling timeout. |
-| `AGENT_TIMEOUT_MS` | ⭕ (default `15000`) | HTTP timeout for agent calls. |
+| `AGENT_TIMEOUT_MS` | ⭕ (default `45000`) | HTTP timeout for agent calls. |
 | `HEALTH_PORT` | ⭕ (default `8081`) | Port for the local health endpoint. |
 | `TG_DROP_PENDING_UPDATES` | ⭕ (default `true`) | Drop backlog when the service restarts. |
 | `TG_MODE` | implicit | Only `polling` is supported right now; left for future webhook mode. |
