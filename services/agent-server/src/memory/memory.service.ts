@@ -3,9 +3,10 @@ import { AppConfigService } from '../config/config.service';
 import { REDIS_CLIENT, type RedisClient } from './redis.provider';
 
 export interface MemoryMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content?: string;
   meta?: Record<string, unknown>;
+  toolCalls?: unknown[];
 }
 
 @Injectable()
