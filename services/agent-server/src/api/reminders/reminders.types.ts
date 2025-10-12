@@ -15,6 +15,7 @@ export interface ReminderMetadata {
   uuid: string | null;
   description: string | null;
   initialDate: string | null;
+  nextDate: string | null;
   frequencyType: string;
   frequencyNumber: number | null;
 }
@@ -26,4 +27,9 @@ export interface ReminderItem {
 
 export interface RemindersResponse {
   items: ReminderItem[];
+}
+
+export interface RemindersMessageResponse {
+  message: string;
+  dataAvailable: boolean;
 }
