@@ -69,8 +69,9 @@ export class ToolRouterNode {
         async (_args, config?: RunnableConfig) => {
           try {
             this.extractChatId(config);
-            const reminders = await this.remindersService.getReminders();
-            return JSON.stringify({ items: reminders });
+            const digest =
+              await this.remindersService.getRemindersTodayMessage();
+            return digest.message;
           } catch (error) {
             const reason =
               error instanceof Error ? error.message : String(error);
@@ -83,7 +84,7 @@ export class ToolRouterNode {
         {
           name: 'reminders_get_upcoming',
           description:
-            'Retrieve upcoming reminders/events for all contacts. Returns JSON with contact and event details.',
+            'Retrieve upcoming reminders/events for all contacts. Returns a formatted digest.',
           schema: z.object({}),
         },
       ),
@@ -93,9 +94,10 @@ export class ToolRouterNode {
             const chatId = this.resolveContactChatId(config);
             const targetId =
               contactId?.trim() ||
-              ((await this.memoryService.getHandle(chatId, 'last_contact_id')) as
-                | string
-                | undefined);
+              ((await this.memoryService.getHandle(
+                chatId,
+                'last_contact_id',
+              )) as string | undefined);
 
             if (!targetId) {
               return 'No contact id provided and no recent contact is known.';
