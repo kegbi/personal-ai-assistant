@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { RunnableConfig } from '@langchain/core/runnables';
 import { ContactsService } from '../../../tools/contacts/contacts.service';
 import { MemoryService } from '../../../memory/memory.service';
+import { RemindersService } from '../../../api/reminders/reminders.service';
 
 @Injectable()
 export class ToolRouterNode {
@@ -16,6 +17,7 @@ export class ToolRouterNode {
   constructor(
     private readonly contactsService: ContactsService,
     private readonly memoryService: MemoryService,
+    private readonly remindersService: RemindersService,
   ) {
     this.tools = [
       tool(
@@ -61,6 +63,28 @@ export class ToolRouterNode {
               .optional()
               .describe('Optional pre-defined identifier, otherwise generated'),
           }),
+        },
+      ),
+      tool(
+        async (_args, config?: RunnableConfig) => {
+          try {
+            this.extractChatId(config);
+            const reminders = await this.remindersService.getReminders();
+            return JSON.stringify({ items: reminders });
+          } catch (error) {
+            const reason =
+              error instanceof Error ? error.message : String(error);
+            this.logger.warn(`reminders_get_upcoming failed: ${reason}`);
+            return `Unable to fetch upcoming reminders: ${
+              error instanceof Error ? error.message : error
+            }`;
+          }
+        },
+        {
+          name: 'reminders_get_upcoming',
+          description:
+            'Retrieve upcoming reminders/events for all contacts. Returns JSON with contact and event details.',
+          schema: z.object({}),
         },
       ),
       tool(

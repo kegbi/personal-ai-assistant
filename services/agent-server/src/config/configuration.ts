@@ -32,5 +32,6 @@ export default (): AppConfig => ({
   monica: {
     url: process.env.MONICA_API_URL ?? 'https://app.monicahq.com/api',
     token: process.env.MONICA_API_TOKEN ?? '',
+    websiteUrl: process.env.MONICA_WEB_URL ?? 'https://app.monicahq.com',
   },
 });

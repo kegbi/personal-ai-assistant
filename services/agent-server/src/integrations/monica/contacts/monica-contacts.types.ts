@@ -24,6 +24,7 @@ export interface MonicaContactReference {
   last_name: string | null;
   nickname: string | null;
   gender: string | null;
+  gender_type?: string | null;
   is_partial: boolean;
   is_active?: boolean;
   is_dead?: boolean;

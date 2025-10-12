@@ -24,6 +24,7 @@ export interface AiSection {
 export interface MonicaSection {
   url: string;
   token: string;
+  websiteUrl: string;
 }
 
 export interface AppConfig {

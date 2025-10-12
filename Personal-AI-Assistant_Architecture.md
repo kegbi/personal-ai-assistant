@@ -90,7 +90,11 @@ Transport concerns (webhooks, polling, auth, rate limits) are isolated. The agen
 - Exposes typed services for CRM features (reminders, contacts, notes).
 - Shared across tools so orchestrator and future transports can reuse the same adapter.
 
-### 3.8 CommonModule
+### 3.8 FutureEventsModule
+- Wraps Monica reminders into a consumption-friendly `FutureEventsService`.
+- Exposes GET `/future-events` alongside the `events_get_future` LangGraph tool for upcoming events.
+
+### 3.9 CommonModule
 - Cross‑cutting concerns: logging interceptor, exception filter, shared types/utilities.
 
 ---
@@ -243,6 +247,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - `REDIS_HOST=redis`, `REDIS_PORT=6379`, `MEM_WINDOW_SIZE=15`, `HANDLE_TTL_SECONDS=7200`
 - `AGENT_BASE_URL=http://agent-server:3000` (adapter → agent)
 - `MONICA_API_URL`, `MONICA_API_TOKEN` (OAuth token for Monica API access)
+- `MONICA_WEB_URL` (public Monica app base, used for human-facing links)
 
 ---
 
@@ -308,6 +313,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - [x] Introduce Monica API connector with reminders pagination helpers.  
 - [x] Implement Monica contacts service (list/get/search/update/delete).  
 - [x] Implement Monica notes service (list/contact notes/CRUD).  
+- [x] Add reminders aggregator (GET /reminders/upcoming + LangGraph tool).  
 - [ ] Bring up `docker compose up -d --build` and test `/health` and a hello flow.  
 
 ---
@@ -323,6 +329,7 @@ _The compose file is already created in `infra/docker-compose.yml` (see repo); i
 - Introduced Monica connector module with reminders fetch + digest helpers.
 - Added Monica contacts service (list/get/search/update/delete + career updates).
 - Added Monica notes service (list, per-contact, CRUD with favorites support).
+- Delivered reminders aggregator (GET /reminders/upcoming \+ LangGraph tool) extracting Monica data.
 
 **Remaining (near-term)**
 - Flesh out contact repository persistence (beyond in-memory) and add list/search surfaces.
