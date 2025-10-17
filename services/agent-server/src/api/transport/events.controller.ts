@@ -4,7 +4,6 @@ import { IdempotencyService } from '../../common/idempotency.service';
 import { buildThreadKey } from '../../common/keys.util';
 import { OrchestratorService } from '../../orchestrator/orchestrator.service';
 import { AgentResponseDto } from '../../transport/dto/agent-response.dto';
-import { MessageReceivedDto } from '../../transport/dto/message-received.dto';
 import { NormalizedEventDto } from './dto/normalized-event.dto';
 import { BearerGuard } from './guards/bearer.guard';
 
@@ -72,7 +71,7 @@ export class EventsController {
   ) {}
 
   /**
-   * Receives a normalized transport event and adapts it to the orchestrator contract.
+   * Receives a normalized transport event and hands it over to the orchestrator.
    *
    * @param event Normalized event payload supplied by a transport adapter.
    * @returns Response produced by the orchestrator.
@@ -114,9 +113,7 @@ export class EventsController {
         return this.buildDuplicateInProgressResponse(event.chatId);
       }
 
-      const response = await this.orchestratorService.handleEvent(
-        this.toLegacyPayload(event),
-      );
+      const response = await this.orchestratorService.handleEvent(event);
 
       await this.idempotencyService.storeResponse(
         threadKey,
@@ -127,35 +124,7 @@ export class EventsController {
       return response;
     }
 
-    return this.orchestratorService.handleEvent(this.toLegacyPayload(event));
-  }
-
-  /**
-   * Builds the legacy transport DTO expected by the orchestrator.
-   *
-   * @param event Normalized transport event supplied to the controller.
-   * @returns MessageReceivedDto representing the legacy payload.
-   */
-  private toLegacyPayload(event: NormalizedEventDto): MessageReceivedDto {
-    const commandCandidate = (event.text ?? '').trim().split(' ')[0] ?? '';
-    const isCommand = event.type === 'command';
-    const command =
-      isCommand && commandCandidate.length > 0 ? commandCandidate : undefined;
-
-    return {
-      chatId: event.chatId,
-      userId: event.userId ?? event.chatId,
-      text: event.text,
-      voiceUrl: event.voiceUrl,
-      isCommand,
-      command,
-      payload: {
-        ...(event.payload ?? {}),
-        connectorId: event.connectorId,
-        eventType: event.type,
-        idempotencyKey: event.idempotencyKey,
-      },
-    };
+    return this.orchestratorService.handleEvent(event);
   }
 
   /**

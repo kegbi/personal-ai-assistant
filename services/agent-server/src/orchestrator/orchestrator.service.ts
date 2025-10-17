@@ -1,20 +1,24 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
-  AIMessage,
   BaseMessage,
   isAIMessage,
   isBaseMessage,
 } from '@langchain/core/messages';
-import { MessageReceivedDto } from '../transport/dto/message-received.dto';
-import { AgentResponseDto } from '../transport/dto/agent-response.dto';
+import { NormalizedEventDto } from '../api/transport/dto/normalized-event.dto';
 import { MemoryService } from '../memory/memory.service';
+import { AgentResponseDto } from '../transport/dto/agent-response.dto';
+import { CommandRouter } from './command-router.service';
 import { GraphFactory, type CompiledGraph } from './langgraph/graph.factory';
-import { HistoryBuilderService } from './messages/history-builder.service';
 import { GeneratedMessagePersisterService } from './messages/generated-message-persister.service';
 import type { MessageSerializer } from './messages/interfaces/message-serializer';
+import { HistoryBuilderService } from './messages/history-builder.service';
 import { MESSAGE_SERIALIZER } from './messages/tokens';
-import type { ToolInvocationMeta } from './messages/types/tool-invocation-meta';
+import { InputNormalizer } from './input-normalizer.service';
+import { ResponseBuilder } from './response-builder.service';
 
+/**
+ * Coordinates the orchestration pipeline, connecting memory, LangGraph, and response shaping.
+ */
 @Injectable()
 export class OrchestratorService {
   private readonly logger = new Logger(OrchestratorService.name);
@@ -25,174 +29,73 @@ export class OrchestratorService {
     private readonly graphFactory: GraphFactory,
     private readonly historyBuilder: HistoryBuilderService,
     private readonly generatedMessagePersister: GeneratedMessagePersisterService,
+    private readonly commandRouter: CommandRouter,
+    private readonly inputNormalizer: InputNormalizer,
+    private readonly responseBuilder: ResponseBuilder,
     @Inject(MESSAGE_SERIALIZER)
-    private readonly messageTransformer: MessageSerializer,
+    private readonly messageSerializer: MessageSerializer,
   ) {
     this.graph = this.graphFactory.build();
   }
 
   /**
-   * Routes inbound user messages through LangGraph and returns the assistant reply.
+   * Routes inbound events through the orchestration stack to produce an assistant reply.
+   *
+   * @param event Normalized transport event emitted by the ingress controller.
+   * @returns Response ready to be delivered back to the transport adapter.
    */
-  async handleEvent(message: MessageReceivedDto): Promise<AgentResponseDto> {
-    if (message.isCommand && message.command) {
-      return this.handleCommand(message);
+  async handleEvent(event: NormalizedEventDto): Promise<AgentResponseDto> {
+    if (event.type === 'command' && event.text) {
+      return this.commandRouter.handle(event);
     }
 
-    const userContent = this.resolveUserContent(message);
+    const userContent = this.inputNormalizer.toText(event);
 
-    await this.memoryService.pushMessage(message.chatId, {
+    await this.memoryService.pushMessage(event.chatId, {
       role: 'user',
       content: userContent,
-      meta: this.buildUserMeta(message),
+      meta: this.inputNormalizer.userMeta(event),
     });
 
-    const window = await this.memoryService.getWindow(message.chatId);
+    const window = await this.memoryService.getWindow(event.chatId);
     const history = this.historyBuilder.buildHistory(window);
     const initialLength = history.length;
 
     this.logger.debug(
-      `Invoking LangGraph for chat ${message.chatId} (history=${history.length}, window=${window.length})`,
+      `Invoking LangGraph for chat ${event.chatId} (history=${history.length}, window=${window.length})`,
     );
 
     const result = await this.graph.invoke(
-      {
-        messages: history,
-      },
-      {
-        configurable: {
-          chatId: message.chatId,
-        },
-      },
+      { messages: history },
+      { configurable: { chatId: event.chatId } },
     );
 
     const rawMessages = Array.isArray(result.messages) ? result.messages : [];
     const messages = rawMessages.filter((message): message is BaseMessage =>
       isBaseMessage(message),
     );
-    const generated = messages.slice(initialLength);
+    const generatedIndex = initialLength;
+    const generatedMessages = messages.slice(generatedIndex);
 
     this.logger.debug(
-      `LangGraph produced ${generated.length} message(s) for chat ${message.chatId}${
-        generated.length
-          ? `: ${generated
-              .map((msg) => this.messageTransformer.describeMessageForLog(msg))
+      `LangGraph produced ${generatedMessages.length} message(s) for chat ${event.chatId}${
+        generatedMessages.length
+          ? `: ${generatedMessages
+              .map((msg) => this.messageSerializer.describeMessageForLog(msg))
               .join(', ')}`
           : ''
       }`,
     );
 
     await this.generatedMessagePersister.persistGeneratedMessages(
-      message.chatId,
-      generated,
+      event.chatId,
+      generatedMessages,
     );
 
-    const finalMessage = this.pickFinalAssistantMessage(messages);
-
-    if (!finalMessage) {
+    if (!messages.some((message) => isAIMessage(message))) {
       this.logger.warn('LangGraph completed without an assistant response');
-      return {
-        chatId: message.chatId,
-        text: 'I am not sure how to respond to that just yet.',
-      };
     }
 
-    const toolMeta: ToolInvocationMeta | null =
-      this.messageTransformer.extractToolMeta(generated);
-
-    return {
-      chatId: message.chatId,
-      text: this.messageTransformer.extractMessageContent(finalMessage),
-      meta: toolMeta ? { tool: toolMeta.name, args: toolMeta.args } : undefined,
-    };
-  }
-
-  /**
-   * Handles simple slash commands issued by the user.
-   */
-  private async handleCommand(
-    message: MessageReceivedDto,
-  ): Promise<AgentResponseDto> {
-    const command = message.command?.toLowerCase() ?? '';
-
-    switch (command) {
-      case '/start': {
-        await this.memoryService.clear(message.chatId);
-        return {
-          chatId: message.chatId,
-          text: 'Hello! I am your personal AI assistant. Ask me to remember contacts, update details, or just chat.',
-        };
-      }
-      case '/clear': {
-        await this.memoryService.clear(message.chatId);
-        return {
-          chatId: message.chatId,
-          text: 'Cleared recent conversation memory for this chat.',
-        };
-      }
-      case '/help': {
-        return {
-          chatId: message.chatId,
-          text:
-            'Try:\n' +
-            '• “Remember that Alice is my designer friend.”\n' +
-            '• “Set Alice’s birthday to 1991-05-14.”\n' +
-            '• “Who is Alice?”',
-        };
-      }
-      default:
-        return {
-          chatId: message.chatId,
-          text: `Unknown command ${command}. Available: /start, /help, /clear.`,
-        };
-    }
-  }
-
-  /**
-   * Normalises the various input shapes we accept into a plain-text user message.
-   */
-  private resolveUserContent(message: MessageReceivedDto): string {
-    if (message.text && message.text.trim().length > 0) {
-      return message.text.trim();
-    }
-
-    if (message.voiceUrl) {
-      return `[voice message received: ${message.voiceUrl}]`;
-    }
-
-    return '[empty message]';
-  }
-
-  /**
-   * Builds optional metadata for user messages before they are persisted.
-   */
-  private buildUserMeta(
-    message: MessageReceivedDto,
-  ): Record<string, unknown> | undefined {
-    const meta: Record<string, unknown> = {};
-
-    if (message.voiceUrl) {
-      meta.voiceUrl = message.voiceUrl;
-    }
-
-    if (message.payload) {
-      meta.payload = message.payload;
-    }
-
-    return Object.keys(meta).length > 0 ? meta : undefined;
-  }
-
-  /**
-   * Walks the LangGraph transcript and returns the latest assistant reply.
-   */
-  private pickFinalAssistantMessage(messages: BaseMessage[]): AIMessage | null {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const candidate = messages[index];
-      if (isAIMessage(candidate)) {
-        return candidate;
-      }
-    }
-
-    return null;
+    return this.responseBuilder.build(event.chatId, messages, generatedIndex);
   }
 }
