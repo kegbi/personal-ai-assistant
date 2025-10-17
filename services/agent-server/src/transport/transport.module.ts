@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
-import { TransportController } from './transport.controller';
 import { OrchestratorModule } from '../orchestrator/orchestrator.module';
+import { EventsController } from '../api/transport/events.controller';
+import { BearerGuard } from '../api/transport/guards/bearer.guard';
 
 @Module({
   imports: [OrchestratorModule],
-  controllers: [TransportController],
+  controllers: [EventsController],
+  providers: [BearerGuard],
 })
 export class TransportModule {}

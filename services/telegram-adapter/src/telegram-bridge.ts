@@ -197,11 +197,20 @@ export class TelegramBridge {
     });
   }
 
+  /**
+   * Builds the shared transport payload attributes derived from the Telegram update.
+   *
+   * @param ctx Grammy context that carries the inbound update.
+   * @returns Base payload forwarded to the agent service.
+   */
   private buildBasePayload(ctx: Context): MessageReceivedPayload {
     const chatId = ctx.chat?.id ? String(ctx.chat.id) : 'unknown';
     const userId = ctx.from?.id ? String(ctx.from.id) : chatId;
+    const idempotencyKey = String(ctx.update.update_id);
 
     return {
+      connectorId: 'telegram',
+      idempotencyKey,
       chatId,
       userId,
       payload: {

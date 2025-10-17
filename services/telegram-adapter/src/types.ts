@@ -1,4 +1,6 @@
 export interface MessageReceivedPayload {
+  connectorId?: string;
+  idempotencyKey?: string;
   chatId: string;
   userId: string;
   text?: string;
