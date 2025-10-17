@@ -24,6 +24,25 @@ export const buildThreadKey = (connectorId: string, chatId: string): string =>
   `${connectorId}:${chatId}`;
 
 /**
+ * Produces the Redis key used to persist conversation windows for a thread.
+ *
+ * @param threadKey Deterministic identifier for the thread.
+ * @returns Fully-qualified Redis key for the thread window.
+ */
+export const windowKeyFor = (threadKey: string): string =>
+  `memory:window:${threadKey}`;
+
+/**
+ * Produces the Redis key used to persist auxiliary handles for a thread.
+ *
+ * @param threadKey Deterministic identifier for the thread.
+ * @param handleName Logical handle name scoped within the thread.
+ * @returns Fully-qualified Redis key for the handle entry.
+ */
+export const handleKeyFor = (threadKey: string, handleName: string): string =>
+  `memory:handle:${threadKey}:${handleName}`;
+
+/**
  * Resolves an idempotency key from a request payload using well-known fields.
  *
  * @param body Raw request body originating from the transport layer.

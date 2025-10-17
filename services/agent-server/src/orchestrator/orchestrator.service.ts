@@ -5,6 +5,7 @@ import {
   isBaseMessage,
 } from '@langchain/core/messages';
 import { NormalizedEventDto } from '../api/transport/dto/normalized-event.dto';
+import { buildThreadKey } from '../common/keys.util';
 import { MemoryService } from '../memory/memory.service';
 import { AgentResponseDto } from '../transport/dto/agent-response.dto';
 import { CommandRouter } from './command-router.service';
@@ -49,25 +50,26 @@ export class OrchestratorService {
       return this.commandRouter.handle(event);
     }
 
+    const threadKey = buildThreadKey(event.connectorId, event.chatId);
     const userContent = this.inputNormalizer.toText(event);
 
-    await this.memoryService.pushMessage(event.chatId, {
+    await this.memoryService.pushMessage(threadKey, {
       role: 'user',
       content: userContent,
       meta: this.inputNormalizer.userMeta(event),
     });
 
-    const window = await this.memoryService.getWindow(event.chatId);
+    const window = await this.memoryService.getWindow(threadKey);
     const history = this.historyBuilder.buildHistory(window);
     const initialLength = history.length;
 
     this.logger.debug(
-      `Invoking LangGraph for chat ${event.chatId} (history=${history.length}, window=${window.length})`,
+      `Invoking LangGraph for thread ${threadKey} (history=${history.length}, window=${window.length})`,
     );
 
     const result = await this.graph.invoke(
       { messages: history },
-      { configurable: { chatId: event.chatId } },
+      { configurable: { chatId: threadKey } },
     );
 
     const rawMessages = Array.isArray(result.messages) ? result.messages : [];
@@ -78,7 +80,7 @@ export class OrchestratorService {
     const generatedMessages = messages.slice(generatedIndex);
 
     this.logger.debug(
-      `LangGraph produced ${generatedMessages.length} message(s) for chat ${event.chatId}${
+      `LangGraph produced ${generatedMessages.length} message(s) for thread ${threadKey}${
         generatedMessages.length
           ? `: ${generatedMessages
               .map((msg) => this.messageSerializer.describeMessageForLog(msg))
@@ -88,7 +90,7 @@ export class OrchestratorService {
     );
 
     await this.generatedMessagePersister.persistGeneratedMessages(
-      event.chatId,
+      threadKey,
       generatedMessages,
     );
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NormalizedEventDto } from '../api/transport/dto/normalized-event.dto';
+import { buildThreadKey } from '../common/keys.util';
 import { MemoryService } from '../memory/memory.service';
 import { AgentResponseDto } from '../transport/dto/agent-response.dto';
 
@@ -19,17 +20,18 @@ export class CommandRouter {
   async handle(event: NormalizedEventDto): Promise<AgentResponseDto> {
     const rawText = (event.text ?? '').trim();
     const command = rawText.split(' ')[0]?.toLowerCase() ?? '';
+    const threadKey = buildThreadKey(event.connectorId, event.chatId);
 
     switch (command) {
       case '/start': {
-        await this.memoryService.clear(event.chatId);
+        await this.memoryService.clear(threadKey);
         return {
           chatId: event.chatId,
           text: 'Hello! I am your personal AI assistant. Ask me to remember contacts, update details, or just chat.',
         };
       }
       case '/clear': {
-        await this.memoryService.clear(event.chatId);
+        await this.memoryService.clear(threadKey);
         return {
           chatId: event.chatId,
           text: 'Cleared recent conversation memory for this chat.',

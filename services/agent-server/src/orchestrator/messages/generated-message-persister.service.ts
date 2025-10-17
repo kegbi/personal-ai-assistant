@@ -18,7 +18,7 @@ export class GeneratedMessagePersisterService {
    * Persists assistant and tool responses generated during a LangGraph execution.
    */
   async persistGeneratedMessages(
-    chatId: string,
+    threadKey: string,
     messages: BaseMessage[],
   ): Promise<void> {
     for (const message of messages) {
@@ -31,12 +31,12 @@ export class GeneratedMessagePersisterService {
       }
 
       this.logger.debug(
-        `Persisting generated ${memoryMessage.role} message for chat ${chatId} (toolCalls=${
+        `Persisting generated ${memoryMessage.role} message for thread ${threadKey} (toolCalls=${
           this.messageTransformer.hasToolCalls(memoryMessage) ? 'yes' : 'no'
         })`,
       );
 
-      await this.memoryService.pushMessage(chatId, memoryMessage);
+      await this.memoryService.pushMessage(threadKey, memoryMessage);
     }
   }
 }
