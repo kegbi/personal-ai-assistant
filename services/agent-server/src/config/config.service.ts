@@ -4,6 +4,7 @@ import {
   AiSection,
   AppConfig,
   AppSection,
+  FeaturesSection,
   MemorySection,
   MonicaSection,
   RedisSection,
@@ -20,6 +21,9 @@ const isString = (value: unknown): value is string => typeof value === 'string';
 
 const isNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
+
+const isBoolean = (value: unknown): value is boolean =>
+  typeof value === 'boolean';
 
 const isAppSection: ConfigSectionGuard<'app'> = (
   value: unknown,
@@ -50,6 +54,14 @@ const isMonicaSection: ConfigSectionGuard<'monica'> = (
   isString(value.token) &&
   isString(value.websiteUrl);
 
+const isFeaturesSection: ConfigSectionGuard<'features'> = (
+  value: unknown,
+): value is FeaturesSection =>
+  isRecord(value) &&
+  isBoolean(value.enableCheckpointer) &&
+  isBoolean(value.enableStreaming) &&
+  isBoolean(value.enableIdempotency);
+
 @Injectable()
 export class AppConfigService {
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}
@@ -72,6 +84,10 @@ export class AppConfigService {
 
   get monica(): MonicaSection {
     return this.readSection('monica', isMonicaSection);
+  }
+
+  get features(): FeaturesSection {
+    return this.readSection('features', isFeaturesSection);
   }
 
   /**

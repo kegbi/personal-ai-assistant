@@ -9,3 +9,5 @@ Disabling lint rules in the codebase is forbidden.
 Add JSdoc to created methods and classes on creation and in process of development and refactoring. Update existing JSdoc if needed.
 
 Run lint, build and test before finishing task execution making sure no issues are presented unless stated otherwise.
+
+Use context7 MCP server if need to get docs for libraries, that change often. Example - langchainjs.

@@ -23,10 +23,17 @@ export interface MonicaSection {
   websiteUrl: string;
 }
 
+export interface FeaturesSection {
+  enableCheckpointer: boolean;
+  enableStreaming: boolean;
+  enableIdempotency: boolean;
+}
+
 export interface AppConfig {
   app: AppSection;
   redis: RedisSection;
   memory: MemorySection;
   ai: AiSection;
   monica: MonicaSection;
+  features: FeaturesSection;
 }

@@ -12,6 +12,10 @@ const envSchema = z.object({
   MONICA_API_URL: z.string().url().default('https://app.monicahq.com/api'),
   MONICA_API_TOKEN: z.string().min(1, 'MONICA_API_TOKEN is required'),
   MONICA_WEB_URL: z.string().url().default('https://app.monicahq.com'),
+  ENABLE_CHECKPOINTER: z.coerce.boolean().default(false),
+  ENABLE_STREAMING: z.coerce.boolean().default(false),
+  ENABLE_IDEMPOTENCY: z.coerce.boolean().default(false),
+  AGENT_AUTH_TOKEN: z.string().optional(),
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

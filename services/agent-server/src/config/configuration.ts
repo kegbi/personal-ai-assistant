@@ -6,6 +6,9 @@ const parseNumber = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const parseBoolean = (value: string | undefined): boolean =>
+  (value ?? '').trim().toLowerCase() === 'true';
+
 export default (): AppConfig => ({
   app: {
     port: parseNumber(process.env.PORT, 3000),
@@ -26,5 +29,10 @@ export default (): AppConfig => ({
     url: process.env.MONICA_API_URL ?? 'https://app.monicahq.com/api',
     token: process.env.MONICA_API_TOKEN ?? '',
     websiteUrl: process.env.MONICA_WEB_URL ?? 'https://app.monicahq.com',
+  },
+  features: {
+    enableCheckpointer: parseBoolean(process.env.ENABLE_CHECKPOINTER),
+    enableStreaming: parseBoolean(process.env.ENABLE_STREAMING),
+    enableIdempotency: parseBoolean(process.env.ENABLE_IDEMPOTENCY),
   },
 });
