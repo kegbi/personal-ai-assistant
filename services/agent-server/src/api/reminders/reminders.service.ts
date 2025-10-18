@@ -10,69 +10,33 @@ import { AppConfigService } from '../../config/config.service';
 import { MonicaRemindersService } from '../../integrations/monica/reminders/monica-reminders.service';
 import { ReminderItem, RemindersMessageResponse } from './reminders.types';
 import { MonicaReminder } from '../../integrations/monica/reminders/monica-reminders.types';
+import { CacheService } from '../../common/cache.service';
 
 @Injectable()
 export class RemindersService {
+  private readonly cacheKey = 'monica:reminders:all';
+
   constructor(
     private readonly remindersService: MonicaRemindersService,
     private readonly configService: AppConfigService,
+    private readonly cache: CacheService,
   ) {}
 
   async getReminders(): Promise<ReminderItem[]> {
+    const ttl = this.configService.reminders.cacheTtlSeconds;
+    const cached = await this.cache.get<ReminderItem[]>(this.cacheKey);
+    if (cached && Array.isArray(cached)) {
+      return cached;
+    }
+
     const reminders = await this.remindersService.fetchAllReminders();
+    const items = this.transformToItems(reminders);
 
-    const baseWebsiteUrl = this.stripTrailingSlash(
-      this.configService.monica.websiteUrl,
-    );
-    const websiteBase = baseWebsiteUrl.length > 0 ? baseWebsiteUrl : null;
-
-    const sortedReminders = reminders
-      .slice()
-      .sort((a, b) => this.compareReminderDates(a, b));
-
-    const items = sortedReminders.map((reminder) => {
-      const contact = reminder.contact;
-      const info = contact.information ?? {};
-      const birthdate = info.birthdate?.date ?? null;
-      const avatarUrl = info.avatar?.url ?? null;
-
-      const fallbackNameParts = [contact.first_name, contact.last_name].filter(
-        (value): value is string => Boolean(value && value.trim()),
-      );
-      const fallbackName = fallbackNameParts.join(' ').trim();
-      const fullName =
-        contact.complete_name ??
-        (fallbackName.length > 0 ? fallbackName : null);
-
-      const apiUrl = contact.url ?? null;
-      const websiteUrl =
-        contact.hash_id && websiteBase
-          ? `${websiteBase}/people/${contact.hash_id}`
-          : null;
-
-      return {
-        contact: {
-          id: contact.id,
-          uuid: contact.uuid ?? null,
-          fullName,
-          birthdate,
-          apiUrl,
-          websiteUrl,
-          avatarUrl,
-          gender: contact.gender_type ?? null,
-        },
-        event: {
-          title: reminder.title,
-          id: reminder.id,
-          uuid: reminder.uuid ?? null,
-          description: reminder.description,
-          initialDate: reminder.initial_date ?? null,
-          nextDate: reminder.next_expected_date ?? null,
-          frequencyType: reminder.frequency_type,
-          frequencyNumber: reminder.frequency_number,
-        },
-      };
-    });
+    try {
+      await this.cache.set(this.cacheKey, items, ttl);
+    } catch {
+      // best-effort cache write; ignore failures
+    }
 
     return items;
   }
@@ -99,6 +63,64 @@ export class RemindersService {
     }
 
     return new Date(dateA).getTime() - new Date(dateB).getTime();
+  }
+
+  private transformToItems(reminders: MonicaReminder[]): ReminderItem[] {
+    const baseWebsiteUrl = this.stripTrailingSlash(
+      this.configService.monica.websiteUrl,
+    );
+    const websiteBase = baseWebsiteUrl.length > 0 ? baseWebsiteUrl : null;
+
+    return reminders
+      .slice()
+      .sort((first, second) => this.compareReminderDates(first, second))
+      .map((reminder) => this.toReminderItem(reminder, websiteBase));
+  }
+
+  private toReminderItem(
+    reminder: MonicaReminder,
+    websiteBase: string | null,
+  ): ReminderItem {
+    const { contact } = reminder;
+    const info = contact.information ?? {};
+    const birthdate = info.birthdate?.date ?? null;
+    const avatarUrl = info.avatar?.url ?? null;
+
+    const fallbackNameParts = [contact.first_name, contact.last_name].filter(
+      (value): value is string => Boolean(value && value.trim()),
+    );
+    const fallbackName = fallbackNameParts.join(' ').trim();
+    const fullName =
+      contact.complete_name ?? (fallbackName.length > 0 ? fallbackName : null);
+
+    const apiUrl = contact.url ?? null;
+    const websiteUrl =
+      contact.hash_id && websiteBase
+        ? `${websiteBase}/people/${contact.hash_id}`
+        : null;
+
+    return {
+      contact: {
+        id: contact.id,
+        uuid: contact.uuid ?? null,
+        fullName,
+        birthdate,
+        apiUrl,
+        websiteUrl,
+        avatarUrl,
+        gender: contact.gender_type ?? null,
+      },
+      event: {
+        title: reminder.title,
+        id: reminder.id,
+        uuid: reminder.uuid ?? null,
+        description: reminder.description,
+        initialDate: reminder.initial_date ?? null,
+        nextDate: reminder.next_expected_date ?? null,
+        frequencyType: reminder.frequency_type,
+        frequencyNumber: reminder.frequency_number,
+      },
+    };
   }
 
   private stripTrailingSlash(value: string): string {

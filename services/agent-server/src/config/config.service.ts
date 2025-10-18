@@ -4,9 +4,16 @@ import {
   AiSection,
   AppConfig,
   AppSection,
+  FeaturesSection,
+  LogFormat,
+  LoggingSection,
   MemorySection,
   MonicaSection,
+  OTelExporter,
+  RemindersSection,
   RedisSection,
+  RateLimitSection,
+  TracingSection,
 } from './config.types';
 
 type ConfigSectionGuard<TKey extends keyof AppConfig> = (
@@ -21,6 +28,23 @@ const isString = (value: unknown): value is string => typeof value === 'string';
 const isNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
+const isBoolean = (value: unknown): value is boolean =>
+  typeof value === 'boolean';
+
+const isLogFormat = (value: unknown): value is LogFormat =>
+  value === 'json' || value === 'pretty';
+
+const isOtelExporter = (value: unknown): value is OTelExporter =>
+  value === 'console' || value === 'otlp';
+
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === 'string';
+
+const isRedisTlsSection = (value: unknown): value is RedisSection['tls'] =>
+  isRecord(value) &&
+  isBoolean(value.enabled) &&
+  isBoolean(value.rejectUnauthorized);
+
 const isAppSection: ConfigSectionGuard<'app'> = (
   value: unknown,
 ): value is AppConfig['app'] => isRecord(value) && isNumber(value.port);
@@ -28,7 +52,11 @@ const isAppSection: ConfigSectionGuard<'app'> = (
 const isRedisSection: ConfigSectionGuard<'redis'> = (
   value: unknown,
 ): value is AppConfig['redis'] =>
-  isRecord(value) && isString(value.host) && isNumber(value.port);
+  isRecord(value) &&
+  isString(value.host) &&
+  isNumber(value.port) &&
+  (!('password' in value) || isOptionalString(value.password)) &&
+  isRedisTlsSection(value.tls);
 
 const isMemorySection: ConfigSectionGuard<'memory'> = (
   value: unknown,
@@ -48,7 +76,41 @@ const isMonicaSection: ConfigSectionGuard<'monica'> = (
   isRecord(value) &&
   isString(value.url) &&
   isString(value.token) &&
-  isString(value.websiteUrl);
+  isString(value.websiteUrl) &&
+  isNumber(value.timeoutMs) &&
+  isNumber(value.maxRetries) &&
+  isNumber(value.retryBaseMs) &&
+  isNumber(value.maxPages);
+
+const isRemindersSection: ConfigSectionGuard<'reminders'> = (
+  value: unknown,
+): value is RemindersSection =>
+  isRecord(value) && isNumber(value.cacheTtlSeconds);
+
+const isFeaturesSection: ConfigSectionGuard<'features'> = (
+  value: unknown,
+): value is FeaturesSection =>
+  isRecord(value) &&
+  isBoolean(value.enableCheckpointer) &&
+  isBoolean(value.enableStreaming) &&
+  isBoolean(value.enableIdempotency);
+
+const isLoggingSection: ConfigSectionGuard<'logging'> = (
+  value: unknown,
+): value is LoggingSection => isRecord(value) && isLogFormat(value.format);
+
+const isTracingSection: ConfigSectionGuard<'tracing'> = (
+  value: unknown,
+): value is TracingSection =>
+  isRecord(value) &&
+  isBoolean(value.enabled) &&
+  isOtelExporter(value.exporter) &&
+  (typeof value.otlpEndpoint === 'string' || value.otlpEndpoint === undefined);
+
+const isRateLimitSection: ConfigSectionGuard<'rateLimit'> = (
+  value: unknown,
+): value is RateLimitSection =>
+  isRecord(value) && isNumber(value.perMinute) && isNumber(value.burst);
 
 @Injectable()
 export class AppConfigService {
@@ -72,6 +134,26 @@ export class AppConfigService {
 
   get monica(): MonicaSection {
     return this.readSection('monica', isMonicaSection);
+  }
+
+  get reminders(): RemindersSection {
+    return this.readSection('reminders', isRemindersSection);
+  }
+
+  get features(): FeaturesSection {
+    return this.readSection('features', isFeaturesSection);
+  }
+
+  get logging(): LoggingSection {
+    return this.readSection('logging', isLoggingSection);
+  }
+
+  get rateLimit(): RateLimitSection {
+    return this.readSection('rateLimit', isRateLimitSection);
+  }
+
+  get tracing(): TracingSection {
+    return this.readSection('tracing', isTracingSection);
   }
 
   /**

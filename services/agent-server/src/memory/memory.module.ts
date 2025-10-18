@@ -6,6 +6,6 @@ import { RedisProvider } from './redis.provider';
 @Module({
   imports: [ConfigModule],
   providers: [MemoryService, RedisProvider],
-  exports: [MemoryService],
+  exports: [MemoryService, RedisProvider],
 })
 export class MemoryModule {}

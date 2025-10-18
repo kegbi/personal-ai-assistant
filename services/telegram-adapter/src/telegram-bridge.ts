@@ -3,7 +3,12 @@ import type { Context, NextFunction } from 'grammy';
 import type { Message } from 'grammy/types';
 import type { AdapterConfig } from './config';
 import { AgentClient } from './agent-client';
-import type { AgentResponsePayload, BridgeStatus, MessageReceivedPayload } from './types';
+import type {
+  AgentResponseMeta,
+  AgentResponsePayload,
+  BridgeStatus,
+  MessageReceivedPayload,
+} from './types';
 
 interface BridgeMetrics {
   startedAt: Date;
@@ -139,6 +144,7 @@ export class TelegramBridge {
       const basePayload = this.buildBasePayload(ctx);
       await this.forwardToAgent(ctx, {
         ...basePayload,
+        type: 'command',
         isCommand: true,
         command,
         text: text,
@@ -154,6 +160,7 @@ export class TelegramBridge {
       const basePayload = this.buildBasePayload(ctx);
       await this.forwardToAgent(ctx, {
         ...basePayload,
+        type: 'text',
         text,
       });
     });
@@ -173,6 +180,7 @@ export class TelegramBridge {
 
       await this.forwardToAgent(ctx, {
         ...basePayload,
+        type: 'voice',
         text: caption,
         voiceUrl,
         payload: {
@@ -192,16 +200,26 @@ export class TelegramBridge {
 
       await this.forwardToAgent(ctx, {
         ...this.buildBasePayload(ctx),
+        type: 'other',
         text: this.describeUnsupportedMessage(message),
       });
     });
   }
 
-  private buildBasePayload(ctx: Context): MessageReceivedPayload {
+  /**
+   * Builds the shared transport payload attributes derived from the Telegram update.
+   *
+   * @param ctx Grammy context that carries the inbound update.
+   * @returns Base payload forwarded to the agent service.
+   */
+  private buildBasePayload(ctx: Context): MessagePayloadWithoutType {
     const chatId = ctx.chat?.id ? String(ctx.chat.id) : 'unknown';
     const userId = ctx.from?.id ? String(ctx.from.id) : chatId;
+    const idempotencyKey = String(ctx.update.update_id);
 
     return {
+      connectorId: 'telegram',
+      idempotencyKey,
       chatId,
       userId,
       payload: {
@@ -223,6 +241,11 @@ export class TelegramBridge {
       `Inbound message chatId=${payload.chatId} userId=${payload.userId} text=${payload.text ?? '[non-text payload]'}`,
     );
 
+    if (this.config.streamingMode === 'edit') {
+      await this.forwardToAgentStreaming(ctx, payload);
+      return;
+    }
+
     let response: AgentResponsePayload;
     try {
       response = await this.agentClient.sendMessage(payload);
@@ -242,6 +265,206 @@ export class TelegramBridge {
     }
 
     await this.deliverAgentResponse(ctx, response);
+  }
+
+  private async forwardToAgentStreaming(
+    ctx: Context,
+    payload: MessageReceivedPayload,
+  ): Promise<void> {
+    let placeholderMessageId: number | undefined;
+    let aggregatedText = '';
+    let finalMeta: AgentResponseMeta | undefined;
+    let encounteredError = false;
+    let lastEditAt = 0;
+    let lastTypingAt = 0;
+    let receivedFinal = false;
+
+    const ensureTypingIndicator = async (force = false): Promise<void> => {
+      const now = Date.now();
+      if (!force && now - lastTypingAt < 4_000) {
+        return;
+      }
+      try {
+        await ctx.api.sendChatAction(payload.chatId, 'typing');
+        lastTypingAt = now;
+      } catch (error) {
+        this.log(
+          `Failed to send typing indicator: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          'error',
+        );
+      }
+    };
+
+    try {
+      await ensureTypingIndicator(true);
+      const stream = this.agentClient.sendMessageStream(payload);
+
+      for await (const event of stream) {
+        if (event.type === 'start') {
+          if (placeholderMessageId === undefined) {
+            placeholderMessageId = await this.sendStreamingPlaceholder(
+              ctx,
+              payload.chatId,
+              ctx.message?.message_id,
+            );
+          }
+          continue;
+        }
+
+        if (event.type === 'delta') {
+          aggregatedText += event.text;
+          await ensureTypingIndicator();
+          if (
+            placeholderMessageId !== undefined &&
+            Date.now() - lastEditAt >= this.config.streamingMinEditIntervalMs
+          ) {
+            await this.editStreamingMessage(
+              ctx,
+              payload.chatId,
+              placeholderMessageId,
+              aggregatedText,
+            );
+            lastEditAt = Date.now();
+          }
+          continue;
+        }
+
+        if (event.type === 'tool') {
+          this.log(
+            `Streaming tool hint name=${event.name}`,
+          );
+          continue;
+        }
+
+        if (event.type === 'error') {
+          encounteredError = true;
+          this.metrics.lastAgentError = event.message;
+          if (placeholderMessageId !== undefined) {
+            await this.editStreamingMessage(
+              ctx,
+              payload.chatId,
+              placeholderMessageId,
+              'Sorry, something went wrong while talking to the assistant.',
+            );
+          } else {
+            await this.safeReply(
+              ctx,
+              'Sorry, something went wrong while talking to the assistant. Please try again in a moment.',
+            );
+          }
+          break;
+        }
+
+        if (event.type === 'final') {
+          receivedFinal = true;
+          finalMeta = event.meta;
+          if (event.text.length > 0) {
+            aggregatedText = event.text;
+          }
+          const finalText = this.normalizeStreamingText(aggregatedText);
+          if (placeholderMessageId !== undefined) {
+            await this.editStreamingMessage(
+              ctx,
+              payload.chatId,
+              placeholderMessageId,
+              finalText,
+            );
+          } else {
+            await ctx.api.sendMessage(payload.chatId, finalText, {
+              reply_to_message_id: ctx.message?.message_id,
+            });
+          }
+          break;
+        }
+      }
+
+      if (!encounteredError && !receivedFinal) {
+        const finalText = this.normalizeStreamingText(aggregatedText);
+        if (placeholderMessageId !== undefined) {
+          await this.editStreamingMessage(
+            ctx,
+            payload.chatId,
+            placeholderMessageId,
+            finalText,
+          );
+        } else if (finalText.length > 0) {
+          await ctx.api.sendMessage(payload.chatId, finalText, {
+            reply_to_message_id: ctx.message?.message_id,
+          });
+        }
+      }
+
+      if (!encounteredError) {
+        this.metrics.lastAgentInteractionAt = new Date();
+        this.metrics.lastAgentError = undefined;
+        if (finalMeta?.tool) {
+          this.log(
+            `Delivered streaming response with tool=${finalMeta.tool} elapsed=${finalMeta.elapsedMs ?? 'n/a'}ms`,
+          );
+        }
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : `Unknown error: ${String(error)}`;
+      this.metrics.lastAgentError = `Streaming failed: ${message}`;
+      this.log(`Streaming failed: ${message}`, 'error');
+      await this.safeReply(
+        ctx,
+        'Sorry, something went wrong while streaming the response. Please try again in a moment.',
+      );
+    }
+  }
+
+  private async sendStreamingPlaceholder(
+    ctx: Context,
+    chatId: string,
+    replyTo?: number,
+  ): Promise<number | undefined> {
+    try {
+      const placeholder = await ctx.api.sendMessage(chatId, 'Thinking...', {
+        reply_to_message_id: replyTo,
+      });
+      return placeholder.message_id;
+    } catch (error) {
+      this.log(
+        `Failed to send streaming placeholder: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        'error',
+      );
+      return undefined;
+    }
+  }
+
+  private async editStreamingMessage(
+    ctx: Context,
+    chatId: string,
+    messageId: number,
+    text: string,
+  ): Promise<void> {
+    const nextText = this.normalizeStreamingText(text);
+    try {
+      await ctx.api.editMessageText(chatId, messageId, nextText);
+    } catch (error) {
+      this.log(
+        `Failed to edit streaming message: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        'error',
+      );
+    }
+  }
+
+  private normalizeStreamingText(text: string): string {
+    const withUnifiedBreaks = text.replace(/\r\n?/g, '\n');
+    const trimmedLines = withUnifiedBreaks
+      .split('\n')
+      .map((line) => line.replace(/\s+$/g, ''));
+    const compacted = trimmedLines.join('\n').replace(/\n{3,}/g, '\n\n');
+    const finalText = compacted.trim();
+    return finalText.length > 0 ? finalText : '...';
   }
 
   private async deliverAgentResponse(
@@ -342,3 +565,5 @@ export class TelegramBridge {
     }
   }
 }
+
+type MessagePayloadWithoutType = Omit<MessageReceivedPayload, 'type'>;

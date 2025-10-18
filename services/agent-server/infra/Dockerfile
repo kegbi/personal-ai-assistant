@@ -22,11 +22,13 @@ ENV PORT=3000
 RUN npm i -g pnpm
 
 COPY package.json pnpm-lock.yaml* .npmrc* ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=build /app/dist ./dist
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 CMD wget -qO- http://127.0.0.1:3000/health || exit 1
 
 RUN addgroup -S app && adduser -S app -G app
 USER app

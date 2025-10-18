@@ -7,8 +7,7 @@ RUN npm i -g pnpm
 
 # Copy manifest and lockfiles
 COPY package.json pnpm-lock.yaml* .npmrc* ./
-# Use frozen lockfile only if it exists
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 COPY tsconfig*.json ./
 COPY src ./src
@@ -24,13 +23,14 @@ ENV NODE_ENV=production
 RUN npm i -g pnpm
 
 COPY package.json pnpm-lock.yaml* .npmrc* ./
-# Use frozen lockfile only if it exists
-RUN pnpm install
+RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=build /app/dist ./dist
 
 # Health-роут адаптера (опц.) слушает 8081, но в polling порты наружу не открываем
 EXPOSE 8081
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 CMD wget -qO- http://127.0.0.1:8081/health || exit 1
 
 RUN addgroup -S app && adduser -S app -G app
 USER app

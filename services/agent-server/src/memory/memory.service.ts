@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ToolCall } from '@langchain/core/messages/tool';
 import { AppConfigService } from '../config/config.service';
+import { handleKeyFor, windowKeyFor } from '../common/keys.util';
 import { REDIS_CLIENT, type RedisClient } from './redis.provider';
 
 export interface MemoryMessage {
@@ -19,16 +20,22 @@ export class MemoryService {
     private readonly config: AppConfigService,
   ) {}
 
-  private windowKey(chatId: string): string {
-    return `memory:window:${chatId}`;
+  private windowKey(threadKey: string): string {
+    return windowKeyFor(threadKey);
   }
 
-  private handleKey(chatId: string, key: string): string {
-    return `memory:handle:${chatId}:${key}`;
+  private handleKey(threadKey: string, key: string): string {
+    return handleKeyFor(threadKey, key);
   }
 
-  async getWindow(chatId: string): Promise<MemoryMessage[]> {
-    const key = this.windowKey(chatId);
+  /**
+   * Retrieves the current conversation window for the provided thread key.
+   *
+   * @param threadKey Deterministic identifier representing the connector/chat combination.
+   * @returns Ordered list of memory messages associated with the thread.
+   */
+  async getWindow(threadKey: string): Promise<MemoryMessage[]> {
+    const key = this.windowKey(threadKey);
     const entries = await this.redisClient.lRange(key, 0, -1);
 
     if (!entries?.length) {
@@ -43,7 +50,7 @@ export class MemoryService {
           const reason =
             error instanceof Error ? error.message : JSON.stringify(error);
           this.logger.warn(
-            `Failed to parse memory message for chat ${chatId}: ${reason}`,
+            `Failed to parse memory message for thread ${threadKey}: ${reason}`,
           );
           return null;
         }
@@ -51,8 +58,14 @@ export class MemoryService {
       .filter((item): item is MemoryMessage => item !== null);
   }
 
-  async pushMessage(chatId: string, message: MemoryMessage): Promise<void> {
-    const key = this.windowKey(chatId);
+  /**
+   * Appends a message to the thread window while enforcing configured size limits.
+   *
+   * @param threadKey Deterministic identifier for the thread.
+   * @param message Memory message to persist.
+   */
+  async pushMessage(threadKey: string, message: MemoryMessage): Promise<void> {
+    const key = this.windowKey(threadKey);
     const serialized = JSON.stringify(message);
     const windowSize = this.config.memory.windowSize;
 
@@ -63,8 +76,15 @@ export class MemoryService {
       .exec();
   }
 
-  async getHandle(chatId: string, key: string): Promise<unknown> {
-    const handleKey = this.handleKey(chatId, key);
+  /**
+   * Retrieves a handle entry scoped to the provided thread.
+   *
+   * @param threadKey Deterministic identifier for the thread.
+   * @param key Logical handle name to resolve.
+   * @returns Parsed handle payload or undefined when absent.
+   */
+  async getHandle(threadKey: string, key: string): Promise<unknown> {
+    const handleKey = this.handleKey(threadKey, key);
     const raw = await this.redisClient.get(handleKey);
 
     if (raw === null) {
@@ -77,19 +97,19 @@ export class MemoryService {
       const reason =
         error instanceof Error ? error.message : JSON.stringify(error);
       this.logger.warn(
-        `Failed to parse handle ${key} for chat ${chatId}: ${reason}`,
+        `Failed to parse handle ${key} for thread ${threadKey}: ${reason}`,
       );
       return undefined;
     }
   }
 
   async setHandle(
-    chatId: string,
+    threadKey: string,
     key: string,
     value: unknown,
     ttlSeconds?: number,
   ): Promise<void> {
-    const handleKey = this.handleKey(chatId, key);
+    const handleKey = this.handleKey(threadKey, key);
     const payload = JSON.stringify(value);
     const ttl =
       ttlSeconds !== undefined
@@ -105,27 +125,33 @@ export class MemoryService {
     }
   }
 
-  async clear(chatId: string): Promise<void> {
-    const windowKey = this.windowKey(chatId);
+  /**
+   * Removes the thread window and associated handles from Redis.
+   *
+   * @param threadKey Deterministic identifier for the thread.
+   */
+  async clear(threadKey: string): Promise<void> {
+    const windowKey = this.windowKey(threadKey);
     await this.redisClient.del(windowKey);
 
     const handleKeys: string[] = [];
     const iterator = this.redisClient.scanIterator({
-      MATCH: `${this.handleKey(chatId, '*')}`,
+      MATCH: `${this.handleKey(threadKey, '*')}`,
       COUNT: 50,
     });
 
     for await (const handleKey of iterator) {
-      let keyValue: string;
       if (typeof handleKey === 'string') {
-        keyValue = handleKey;
-      } else if (handleKey instanceof Buffer) {
-        keyValue = handleKey.toString();
-      } else {
-        keyValue = String(handleKey);
+        handleKeys.push(handleKey);
+        continue;
       }
 
-      handleKeys.push(keyValue);
+      if (handleKey instanceof Buffer) {
+        handleKeys.push(handleKey.toString());
+        continue;
+      }
+
+      handleKeys.push(String(handleKey));
     }
 
     if (handleKeys.length > 0) {
