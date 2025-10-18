@@ -1,5 +1,6 @@
 import { Logger, Provider } from '@nestjs/common';
 import { createClient } from 'redis';
+import type { RedisClientOptions } from 'redis';
 import { AppConfigService } from '../config/config.service';
 
 export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
@@ -10,11 +11,26 @@ export const RedisProvider: Provider = {
   inject: [AppConfigService],
   useFactory: async (config: AppConfigService): Promise<RedisClient> => {
     const logger = new Logger('RedisClient');
-    const client = createClient({
-      socket: {
+
+    let socketOptions: NonNullable<RedisClientOptions['socket']>;
+
+    if (config.redis.tls.enabled) {
+      socketOptions = {
         host: config.redis.host,
         port: config.redis.port,
-      },
+        tls: true,
+        rejectUnauthorized: config.redis.tls.rejectUnauthorized,
+      };
+    } else {
+      socketOptions = {
+        host: config.redis.host,
+        port: config.redis.port,
+      };
+    }
+
+    const client = createClient({
+      password: config.redis.password,
+      socket: socketOptions,
     });
 
     client.on('error', (error) => {

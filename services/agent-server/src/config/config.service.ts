@@ -12,6 +12,7 @@ import {
   OTelExporter,
   RemindersSection,
   RedisSection,
+  RateLimitSection,
   TracingSection,
 } from './config.types';
 
@@ -36,6 +37,14 @@ const isLogFormat = (value: unknown): value is LogFormat =>
 const isOtelExporter = (value: unknown): value is OTelExporter =>
   value === 'console' || value === 'otlp';
 
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === 'string';
+
+const isRedisTlsSection = (value: unknown): value is RedisSection['tls'] =>
+  isRecord(value) &&
+  isBoolean(value.enabled) &&
+  isBoolean(value.rejectUnauthorized);
+
 const isAppSection: ConfigSectionGuard<'app'> = (
   value: unknown,
 ): value is AppConfig['app'] => isRecord(value) && isNumber(value.port);
@@ -43,7 +52,11 @@ const isAppSection: ConfigSectionGuard<'app'> = (
 const isRedisSection: ConfigSectionGuard<'redis'> = (
   value: unknown,
 ): value is AppConfig['redis'] =>
-  isRecord(value) && isString(value.host) && isNumber(value.port);
+  isRecord(value) &&
+  isString(value.host) &&
+  isNumber(value.port) &&
+  (!('password' in value) || isOptionalString(value.password)) &&
+  isRedisTlsSection(value.tls);
 
 const isMemorySection: ConfigSectionGuard<'memory'> = (
   value: unknown,
@@ -94,6 +107,11 @@ const isTracingSection: ConfigSectionGuard<'tracing'> = (
   isOtelExporter(value.exporter) &&
   (typeof value.otlpEndpoint === 'string' || value.otlpEndpoint === undefined);
 
+const isRateLimitSection: ConfigSectionGuard<'rateLimit'> = (
+  value: unknown,
+): value is RateLimitSection =>
+  isRecord(value) && isNumber(value.perMinute) && isNumber(value.burst);
+
 @Injectable()
 export class AppConfigService {
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}
@@ -128,6 +146,10 @@ export class AppConfigService {
 
   get logging(): LoggingSection {
     return this.readSection('logging', isLoggingSection);
+  }
+
+  get rateLimit(): RateLimitSection {
+    return this.readSection('rateLimit', isRateLimitSection);
   }
 
   get tracing(): TracingSection {

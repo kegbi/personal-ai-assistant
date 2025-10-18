@@ -5,6 +5,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().min(0).default(3000),
   REDIS_HOST: z.string().default(DEFAULT_REDIS_HOST),
   REDIS_PORT: z.coerce.number().int().default(6379),
+  REDIS_PASSWORD: z.string().min(1).optional(),
+  REDIS_TLS: z.coerce.boolean().default(false),
+  REDIS_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(true),
   MEM_WINDOW_SIZE: z.coerce.number().int().min(1).default(15),
   HANDLE_TTL_SECONDS: z.coerce.number().int().min(0).default(7200),
   OPENAI_API_KEY: z.string().optional().default(''),
@@ -25,6 +28,8 @@ const envSchema = z.object({
   ENABLE_OTEL_TRACING: z.coerce.boolean().default(false),
   OTEL_EXPORTER: z.enum(['console', 'otlp']).default('console'),
   OTEL_OTLP_ENDPOINT: z.string().url().optional(),
+  RATE_LIMIT_PER_MIN: z.coerce.number().int().min(0).default(60),
+  RATE_LIMIT_BURST: z.coerce.number().int().min(0).default(10),
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

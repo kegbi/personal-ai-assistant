@@ -6,6 +6,7 @@ import { OrchestratorService } from '../../orchestrator/orchestrator.service';
 import { AgentResponseDto } from '../../transport/dto/agent-response.dto';
 import { NormalizedEventDto } from './dto/normalized-event.dto';
 import { BearerGuard } from './guards/bearer.guard';
+import { RateLimitGuard } from '../../common/rate-limit.guard';
 
 const DUPLICATE_IN_PROGRESS_MESSAGE = 'Processing duplicate, please wait…';
 
@@ -61,7 +62,7 @@ const isAgentResponseDto = (value: unknown): value is AgentResponseDto => {
 /**
  * Handles transport-facing webhook events and forwards them to the orchestrator.
  */
-@UseGuards(BearerGuard)
+@UseGuards(RateLimitGuard, BearerGuard)
 @Controller('events')
 export class EventsController {
   constructor(

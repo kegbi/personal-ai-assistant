@@ -2,9 +2,16 @@ export interface AppSection {
   port: number;
 }
 
+export interface RedisTlsSection {
+  enabled: boolean;
+  rejectUnauthorized: boolean;
+}
+
 export interface RedisSection {
   host: string;
   port: number;
+  password?: string;
+  tls: RedisTlsSection;
 }
 
 export interface MemorySection {
@@ -45,6 +52,11 @@ export interface LoggingSection {
 
 export type OTelExporter = 'console' | 'otlp';
 
+export interface RateLimitSection {
+  perMinute: number;
+  burst: number;
+}
+
 export interface TracingSection {
   enabled: boolean;
   exporter: OTelExporter;
@@ -60,5 +72,6 @@ export interface AppConfig {
   reminders: RemindersSection;
   features: FeaturesSection;
   logging: LoggingSection;
+  rateLimit: RateLimitSection;
   tracing: TracingSection;
 }

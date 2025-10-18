@@ -4,11 +4,12 @@ import { AppConfigService } from '../../config/config.service';
 import { OrchestratorService } from '../../orchestrator/orchestrator.service';
 import { NormalizedEventDto } from './dto/normalized-event.dto';
 import { BearerGuard } from './guards/bearer.guard';
+import { RateLimitGuard } from '../../common/rate-limit.guard';
 import type { AgentStreamEvent } from '../../transport/dto/agent-stream-event.dto';
 
 const NDJSON_CONTENT_TYPE = 'application/x-ndjson; charset=utf-8';
 
-@UseGuards(BearerGuard)
+@UseGuards(RateLimitGuard, BearerGuard)
 @Controller('events')
 export class EventsStreamController {
   constructor(
