@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StreamingMode } from './types';
 
 export interface AdapterConfig {
   tgBotToken: string;
@@ -9,6 +10,8 @@ export interface AdapterConfig {
   agentTimeoutMs: number;
   healthPort: number;
   dropPendingUpdates: boolean;
+  streamingMode: StreamingMode;
+  streamingMinEditIntervalMs: number;
 }
 
 const coerceBoolean = (value: string | undefined, fallback: boolean): boolean => {
@@ -40,6 +43,8 @@ const configSchema = z.object({
   agentTimeoutMs: z.number().int().positive().default(45_000),
   healthPort: z.number().int().positive().default(8081),
   dropPendingUpdates: z.boolean().default(true),
+  streamingMode: z.enum(['disabled', 'edit']).default('disabled'),
+  streamingMinEditIntervalMs: z.number().int().positive().default(400),
   mode: z.literal('polling'),
 });
 
@@ -73,6 +78,10 @@ export const loadConfig = (): AdapterConfig => {
       : undefined,
     healthPort: process.env.HEALTH_PORT ? Number(process.env.HEALTH_PORT) : undefined,
     dropPendingUpdates: coerceBoolean(process.env.TG_DROP_PENDING_UPDATES, true),
+    streamingMode: (process.env.STREAMING_MODE ?? 'disabled').trim().toLowerCase(),
+    streamingMinEditIntervalMs: process.env.STREAMING_MIN_EDIT_INTERVAL_MS
+      ? Number(process.env.STREAMING_MIN_EDIT_INTERVAL_MS)
+      : undefined,
     mode: (process.env.TG_MODE ?? 'polling').toLowerCase(),
   });
 
@@ -85,5 +94,7 @@ export const loadConfig = (): AdapterConfig => {
     agentTimeoutMs: parsed.agentTimeoutMs,
     healthPort: parsed.healthPort,
     dropPendingUpdates: parsed.dropPendingUpdates,
+    streamingMode: parsed.streamingMode,
+    streamingMinEditIntervalMs: parsed.streamingMinEditIntervalMs,
   };
 };
