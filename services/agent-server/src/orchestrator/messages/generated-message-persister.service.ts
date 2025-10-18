@@ -1,5 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { BaseMessage } from '@langchain/core/messages';
+import {
+  isAIMessage,
+  isToolMessage,
+  type BaseMessage,
+} from '@langchain/core/messages';
 import { MemoryService } from '../../memory/memory.service';
 import type { MessageSerializer } from './interfaces/message-serializer';
 import { MESSAGE_SERIALIZER } from './tokens';
@@ -30,6 +34,12 @@ export class GeneratedMessagePersisterService {
         continue;
       }
 
+      this.logGeneratedMessageContent(
+        threadKey,
+        message,
+        memoryMessage.content,
+      );
+
       this.logger.debug(
         `Persisting generated ${memoryMessage.role} message for thread ${threadKey} (toolCalls=${
           this.messageTransformer.hasToolCalls(memoryMessage) ? 'yes' : 'no'
@@ -38,5 +48,31 @@ export class GeneratedMessagePersisterService {
 
       await this.memoryService.pushMessage(threadKey, memoryMessage);
     }
+  }
+
+  private logGeneratedMessageContent(
+    threadKey: string,
+    message: BaseMessage,
+    persistedContent?: string,
+  ): void {
+    if (!isAIMessage(message) && !isToolMessage(message)) {
+      return;
+    }
+
+    const rawContent =
+      persistedContent && persistedContent.length > 0
+        ? persistedContent
+        : this.messageTransformer.extractMessageContent(message);
+
+    if (!rawContent || rawContent.length === 0) {
+      return;
+    }
+
+    const truncated =
+      rawContent.length > 1000 ? `${rawContent.slice(0, 1000)}…` : rawContent;
+
+    this.logger.debug(
+      `Generated ${message._getType()} message content for thread ${threadKey}: ${truncated}`,
+    );
   }
 }

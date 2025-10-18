@@ -458,8 +458,13 @@ export class TelegramBridge {
   }
 
   private normalizeStreamingText(text: string): string {
-    const trimmed = text.replace(/\s+/g, ' ').trim();
-    return trimmed.length > 0 ? trimmed : '...';
+    const withUnifiedBreaks = text.replace(/\r\n?/g, '\n');
+    const trimmedLines = withUnifiedBreaks
+      .split('\n')
+      .map((line) => line.replace(/\s+$/g, ''));
+    const compacted = trimmedLines.join('\n').replace(/\n{3,}/g, '\n\n');
+    const finalText = compacted.trim();
+    return finalText.length > 0 ? finalText : '...';
   }
 
   private async deliverAgentResponse(
