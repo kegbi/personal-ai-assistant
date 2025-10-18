@@ -21,6 +21,14 @@ export interface MonicaSection {
   url: string;
   token: string;
   websiteUrl: string;
+  timeoutMs: number;
+  maxRetries: number;
+  retryBaseMs: number;
+  maxPages: number;
+}
+
+export interface RemindersSection {
+  cacheTtlSeconds: number;
 }
 
 export interface FeaturesSection {
@@ -35,5 +43,6 @@ export interface AppConfig {
   memory: MemorySection;
   ai: AiSection;
   monica: MonicaSection;
+  reminders: RemindersSection;
   features: FeaturesSection;
 }

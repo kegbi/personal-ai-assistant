@@ -29,6 +29,13 @@ export default (): AppConfig => ({
     url: process.env.MONICA_API_URL ?? 'https://app.monicahq.com/api',
     token: process.env.MONICA_API_TOKEN ?? '',
     websiteUrl: process.env.MONICA_WEB_URL ?? 'https://app.monicahq.com',
+    timeoutMs: parseNumber(process.env.MONICA_TIMEOUT_MS, 10_000),
+    maxRetries: parseNumber(process.env.MONICA_MAX_RETRIES, 3),
+    retryBaseMs: parseNumber(process.env.MONICA_RETRY_BASE_MS, 300),
+    maxPages: parseNumber(process.env.MONICA_MAX_PAGES, 100),
+  },
+  reminders: {
+    cacheTtlSeconds: parseNumber(process.env.REMINDERS_CACHE_TTL_SEC, 300),
   },
   features: {
     enableCheckpointer: parseBoolean(process.env.ENABLE_CHECKPOINTER),

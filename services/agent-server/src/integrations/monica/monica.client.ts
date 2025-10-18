@@ -12,11 +12,17 @@ export class MonicaClient {
   private readonly logger = new Logger(MonicaClient.name);
   private readonly baseUrl: string;
   private readonly token: string;
+  private readonly timeoutMs: number;
+  private readonly maxRetries: number;
+  private readonly retryBaseMs: number;
 
   constructor(private readonly config: AppConfigService) {
     const { url, token } = config.monica;
     this.baseUrl = this.normalizeBaseUrl(url);
     this.token = token;
+    this.timeoutMs = Math.max(100, config.monica.timeoutMs);
+    this.maxRetries = Math.max(0, config.monica.maxRetries);
+    this.retryBaseMs = Math.max(50, config.monica.retryBaseMs);
   }
 
   async get<T>(
@@ -65,31 +71,58 @@ export class MonicaClient {
     const url = this.buildUrl(path, effectiveOptions.query);
     const headers = this.buildHeaders(effectiveOptions.headers);
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      body:
-        effectiveOptions.body !== undefined
-          ? JSON.stringify(effectiveOptions.body)
-          : undefined,
-    });
+    const maxRetries = this.maxRetries;
+    const baseDelay = this.retryBaseMs;
+    let attempt = 0;
 
-    if (!response.ok) {
-      throw await this.toError(response);
+    while (true) {
+      attempt += 1;
+      const signal = AbortSignal.timeout(this.timeoutMs);
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers,
+          body:
+            effectiveOptions.body !== undefined
+              ? JSON.stringify(effectiveOptions.body)
+              : undefined,
+          signal,
+        });
+
+        if (!response.ok) {
+          if (this.isRetryable(response.status) && attempt <= maxRetries) {
+            await this.sleepWithJitter(baseDelay, attempt);
+            continue;
+          }
+          throw await this.toError(response);
+        }
+
+        if (response.status === 204) {
+          return null;
+        }
+
+        const payload: unknown = await response.json();
+        if (!effectiveOptions.parseResponse) {
+          throw new Error(
+            `Missing response parser for Monica ${method} ${path} request.`,
+          );
+        }
+
+        return effectiveOptions.parseResponse(payload);
+      } catch (error) {
+        if (attempt > maxRetries) {
+          throw error;
+        }
+
+        if (this.shouldRetryAfterError(error)) {
+          await this.sleepWithJitter(baseDelay, attempt);
+          continue;
+        }
+
+        throw error;
+      }
     }
-
-    if (response.status === 204) {
-      return null;
-    }
-
-    const payload: unknown = await response.json();
-    if (!effectiveOptions.parseResponse) {
-      throw new Error(
-        `Missing response parser for Monica ${method} ${path} request.`,
-      );
-    }
-
-    return effectiveOptions.parseResponse(payload);
   }
 
   private buildUrl(
@@ -126,6 +159,37 @@ export class MonicaClient {
 
   private normalizeBaseUrl(url: string): string {
     return url.replace(/\/+$/, '');
+  }
+
+  private isRetryable(status: number): boolean {
+    return status === 429 || (status >= 500 && status < 600);
+  }
+
+  private shouldRetryAfterError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      return true;
+    }
+
+    const message = typeof error.message === 'string' ? error.message : '';
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes('fetch') ||
+      normalized.includes('network') ||
+      normalized.includes('request failed')
+    );
+  }
+
+  private async sleepWithJitter(
+    baseMs: number,
+    attempt: number,
+  ): Promise<void> {
+    const backoff = baseMs * Math.pow(2, attempt - 1);
+    const jitter = Math.floor(Math.random() * Math.min(250, backoff * 0.1));
+    await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
   }
 
   private async toError(response: Response): Promise<Error> {

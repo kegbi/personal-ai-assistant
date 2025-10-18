@@ -6,20 +6,31 @@ import {
   MonicaReminderListResponse,
   ReminderDigestItem,
 } from './monica-reminders.types';
+import { AppConfigService } from '../../../config/config.service';
 
 @Injectable()
 export class MonicaRemindersService {
   private readonly logger = new Logger(MonicaRemindersService.name);
   private readonly pageSize = 100;
 
-  constructor(private readonly monicaClient: MonicaClient) {}
+  constructor(
+    private readonly monicaClient: MonicaClient,
+    private readonly appConfig: AppConfigService,
+  ) {}
 
   async fetchAllReminders(): Promise<MonicaReminder[]> {
     const reminders: MonicaReminder[] = [];
     let page = 1;
-    let hasNext = true;
+    const maxPages = Math.max(1, this.appConfig.monica.maxPages);
 
-    while (hasNext) {
+    while (true) {
+      if (page > maxPages) {
+        this.logger.warn(
+          `Aborting reminders pagination after ${maxPages} pages (safety guard).`,
+        );
+        break;
+      }
+
       const response = await this.monicaClient.get<MonicaReminderListResponse>(
         '/reminders',
         {
@@ -32,21 +43,21 @@ export class MonicaRemindersService {
       );
 
       if (!response) {
-        throw new Error(
-          'Monica API returned no content while listing reminders.',
-        );
+        break;
       }
 
       reminders.push(...response.data);
 
       if (!response.links?.next) {
-        hasNext = false;
+        break;
       } else {
         page += 1;
       }
     }
 
-    this.logger.debug(`Fetched ${reminders.length} Monica reminders`);
+    this.logger.debug(
+      `Fetched ${reminders.length} Monica reminders across ${page - 1} page(s)`,
+    );
     return reminders;
   }
 

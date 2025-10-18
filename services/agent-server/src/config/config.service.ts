@@ -7,6 +7,7 @@ import {
   FeaturesSection,
   MemorySection,
   MonicaSection,
+  RemindersSection,
   RedisSection,
 } from './config.types';
 
@@ -52,7 +53,16 @@ const isMonicaSection: ConfigSectionGuard<'monica'> = (
   isRecord(value) &&
   isString(value.url) &&
   isString(value.token) &&
-  isString(value.websiteUrl);
+  isString(value.websiteUrl) &&
+  isNumber(value.timeoutMs) &&
+  isNumber(value.maxRetries) &&
+  isNumber(value.retryBaseMs) &&
+  isNumber(value.maxPages);
+
+const isRemindersSection: ConfigSectionGuard<'reminders'> = (
+  value: unknown,
+): value is RemindersSection =>
+  isRecord(value) && isNumber(value.cacheTtlSeconds);
 
 const isFeaturesSection: ConfigSectionGuard<'features'> = (
   value: unknown,
@@ -84,6 +94,10 @@ export class AppConfigService {
 
   get monica(): MonicaSection {
     return this.readSection('monica', isMonicaSection);
+  }
+
+  get reminders(): RemindersSection {
+    return this.readSection('reminders', isRemindersSection);
   }
 
   get features(): FeaturesSection {
