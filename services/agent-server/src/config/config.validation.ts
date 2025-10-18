@@ -21,6 +21,10 @@ const envSchema = z.object({
   ENABLE_STREAMING: z.coerce.boolean().default(false),
   ENABLE_IDEMPOTENCY: z.coerce.boolean().default(false),
   AGENT_AUTH_TOKEN: z.string().optional(),
+  LOG_FORMAT: z.enum(['json', 'pretty']).default('pretty'),
+  ENABLE_OTEL_TRACING: z.coerce.boolean().default(false),
+  OTEL_EXPORTER: z.enum(['console', 'otlp']).default('console'),
+  OTEL_OTLP_ENDPOINT: z.string().url().optional(),
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

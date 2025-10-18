@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AIMessage, BaseMessage, isAIMessage } from '@langchain/core/messages';
-import { AgentResponseDto } from '../transport/dto/agent-response.dto';
+import {
+  AgentResponseDto,
+  AgentResponseMeta,
+} from '../transport/dto/agent-response.dto';
 import type { MessageSerializer } from './messages/interfaces/message-serializer';
 import type { ToolInvocationMeta } from './messages/types/tool-invocation-meta';
 import { MESSAGE_SERIALIZER } from './messages/tokens';
@@ -27,6 +30,7 @@ export class ResponseBuilder {
     chatId: string,
     transcript: BaseMessage[],
     generatedFromIndex: number,
+    elapsedMs?: number,
   ): AgentResponseDto {
     const generated = transcript.slice(generatedFromIndex);
     const finalMessage = this.pickFinalAssistantMessage(transcript);
@@ -40,16 +44,12 @@ export class ResponseBuilder {
 
     const toolMeta: ToolInvocationMeta | null =
       this.serializer.extractToolMeta(generated);
+    const meta = this.composeMeta(toolMeta, elapsedMs);
 
     return {
       chatId,
       text: this.serializer.extractMessageContent(finalMessage),
-      meta: toolMeta
-        ? {
-            tool: toolMeta.name,
-            args: toolMeta.args,
-          }
-        : undefined,
+      meta,
     };
   }
 
@@ -68,5 +68,26 @@ export class ResponseBuilder {
     }
 
     return null;
+  }
+
+  private composeMeta(
+    toolMeta: ToolInvocationMeta | null,
+    elapsedMs?: number,
+  ): AgentResponseDto['meta'] {
+    const meta = new AgentResponseMeta();
+    let hasData = false;
+
+    if (toolMeta) {
+      meta.tool = toolMeta.name;
+      meta.args = toolMeta.args;
+      hasData = true;
+    }
+
+    if (typeof elapsedMs === 'number') {
+      meta.elapsedMs = elapsedMs;
+      hasData = true;
+    }
+
+    return hasData ? meta : undefined;
   }
 }

@@ -8,6 +8,8 @@ import { ContactsService } from '../../../tools/contacts/contacts.service';
 import { DatesService } from '../../../tools/dates/dates.service';
 import { MemoryService } from '../../../memory/memory.service';
 import { RemindersService } from '../../../api/reminders/reminders.service';
+import { AppConfigService } from '../../../config/config.service';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
 
 interface CreateContactArgs {
   name: string;
@@ -30,12 +32,14 @@ export class ToolRouterNode {
   private readonly logger = new Logger(ToolRouterNode.name);
   private readonly toolNode: ToolNode;
   readonly tools: StructuredToolInterface[];
+  private readonly tracer = trace.getTracer('agent.tool-router');
 
   constructor(
     private readonly contactsService: ContactsService,
     private readonly memoryService: MemoryService,
     private readonly remindersService: RemindersService,
     private readonly datesService: DatesService,
+    private readonly appConfig: AppConfigService,
   ) {
     this.tools = [
       tool(
@@ -230,18 +234,48 @@ export class ToolRouterNode {
     input: typeof MessagesAnnotation.State,
     config?: RunnableConfig,
   ): Promise<Partial<typeof MessagesAnnotation.State>> {
+    const span = this.tracer.startSpan('tool-router.execute');
+    const startedAt = Date.now();
     try {
       const result: unknown = await this.toolNode.invoke(input, config);
       if (!this.isPartialMessagesState(result)) {
+        const elapsedMs = Date.now() - startedAt;
+        this.logDebug('Tool router returned invalid payload', {
+          elapsedMs,
+        });
+        span.setAttribute('app.elapsed_ms', elapsedMs);
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: 'invalid_state',
+        });
         throw new Error('Tool node returned an invalid state payload.');
       }
+      const elapsedMs = Date.now() - startedAt;
+      this.logDebug('Tool router completed', {
+        elapsedMs,
+      });
+      span.setAttribute('app.elapsed_ms', elapsedMs);
+      span.setStatus({ code: SpanStatusCode.OK });
       return result;
     } catch (error) {
+      const elapsedMs = Date.now() - startedAt;
+      this.logDebug('Tool router failed', {
+        elapsedMs,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      span.recordException(error instanceof Error ? error : String(error));
+      span.setAttribute('app.elapsed_ms', elapsedMs);
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'tool_execution_failed',
+      });
       this.logger.error(
         'Tool execution failed',
         error instanceof Error ? error.stack : String(error),
       );
       throw error;
+    } finally {
+      span.end();
     }
   }
 
@@ -276,5 +310,66 @@ export class ToolRouterNode {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private logDebug(message: string, meta: Record<string, unknown>): void {
+    if (this.appConfig.logging.format === 'json') {
+      this.logger.debug({ message, ...meta });
+      return;
+    }
+
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(meta)) {
+      parts.push(`${key}=${this.describeValue(value)}`);
+    }
+    this.logger.debug(`${message} ${parts.join(' ')}`);
+  }
+
+  private describeValue(value: unknown): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? String(value) : 'NaN';
+    }
+
+    if (typeof value === 'boolean') {
+      return value ? 'true' : 'false';
+    }
+
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    if (typeof value === 'symbol') {
+      return value.description ?? value.toString();
+    }
+
+    if (typeof value === 'function') {
+      return '[function]';
+    }
+
+    if (Array.isArray(value)) {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[array]';
+      }
+    }
+
+    if (value === null || value === undefined) {
+      return 'null';
+    }
+
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[object]';
+      }
+    }
+
+    return '[unknown]';
   }
 }

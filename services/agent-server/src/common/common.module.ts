@@ -5,6 +5,8 @@ import { GlobalExceptionFilter } from './exception.filter';
 import { CacheService } from './cache.service';
 import { IdempotencyService } from './idempotency.service';
 import { LoggingInterceptor } from './logging.interceptor';
+import { RequestContext } from './request-context';
+import { JsonLogger } from './json-logger.service';
 
 @Module({
   imports: [MemoryModule],
@@ -19,7 +21,9 @@ import { LoggingInterceptor } from './logging.interceptor';
     },
     CacheService,
     IdempotencyService,
+    RequestContext,
+    JsonLogger,
   ],
-  exports: [CacheService, IdempotencyService],
+  exports: [CacheService, IdempotencyService, RequestContext, JsonLogger],
 })
 export class CommonModule {}

@@ -37,6 +37,20 @@ export interface FeaturesSection {
   enableIdempotency: boolean;
 }
 
+export type LogFormat = 'json' | 'pretty';
+
+export interface LoggingSection {
+  format: LogFormat;
+}
+
+export type OTelExporter = 'console' | 'otlp';
+
+export interface TracingSection {
+  enabled: boolean;
+  exporter: OTelExporter;
+  otlpEndpoint?: string;
+}
+
 export interface AppConfig {
   app: AppSection;
   redis: RedisSection;
@@ -45,4 +59,6 @@ export interface AppConfig {
   monica: MonicaSection;
   reminders: RemindersSection;
   features: FeaturesSection;
+  logging: LoggingSection;
+  tracing: TracingSection;
 }

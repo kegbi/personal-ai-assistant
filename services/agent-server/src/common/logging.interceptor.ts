@@ -11,6 +11,31 @@ import type { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { buildThreadKey, pickIdempotencyKey } from './keys.util';
+import { RequestContext } from './request-context';
+import { JsonLogger } from './json-logger.service';
+import { AppConfigService } from '../config/config.service';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const extractCorrelationId = (
+  headerValue: string | readonly string[] | undefined,
+): string => {
+  if (typeof headerValue === 'string' && headerValue.length > 0) {
+    return headerValue;
+  }
+
+  if (Array.isArray(headerValue) && headerValue.length > 0) {
+    const candidate = headerValue.find(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    );
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return randomUUID();
+};
 
 const describeError = (error: unknown): string => {
   if (error instanceof Error) {
@@ -25,28 +50,37 @@ const describeError = (error: unknown): string => {
 };
 
 const resolveThreadKey = (body: unknown): string | undefined => {
-  if (typeof body !== 'object' || body === null) {
+  if (!isRecord(body)) {
     return undefined;
   }
 
-  const connectorId: unknown = Reflect.get(body, 'connectorId');
-  const chatId: unknown = Reflect.get(body, 'chatId');
+  const connectorId =
+    typeof body.connectorId === 'string' && body.connectorId.length > 0
+      ? body.connectorId
+      : undefined;
+  const chatId =
+    typeof body.chatId === 'string' && body.chatId.length > 0
+      ? body.chatId
+      : undefined;
 
-  if (
-    typeof connectorId === 'string' &&
-    connectorId.length > 0 &&
-    typeof chatId === 'string' &&
-    chatId.length > 0
-  ) {
-    return buildThreadKey(connectorId, chatId);
+  if (!connectorId || !chatId) {
+    return undefined;
   }
 
-  return undefined;
+  return buildThreadKey(connectorId, chatId);
 };
+
+type SafeRequest = Omit<Request, 'body'> & { body: unknown };
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
-  private readonly logger = new Logger('HTTP');
+  constructor(
+    private readonly requestContext: RequestContext,
+    private readonly logger: JsonLogger,
+    private readonly config: AppConfigService,
+  ) {}
+
+  private readonly prettyLogger = new Logger('HTTP');
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') {
@@ -54,59 +88,85 @@ export class LoggingInterceptor implements NestInterceptor {
     }
 
     const httpContext = context.switchToHttp();
-    const request = httpContext.getRequest<Request>();
+    const request = httpContext.getRequest<SafeRequest>();
     const response = httpContext.getResponse<Response>();
     const { method, url } = request;
 
-    const startedAt = Date.now();
-    const correlationHeader = request.headers['x-correlation-id'];
-    const correlationId =
-      typeof correlationHeader === 'string' && correlationHeader.length > 0
-        ? correlationHeader
-        : randomUUID();
+    const correlationId = extractCorrelationId(
+      request.headers['x-correlation-id'],
+    );
     const runId = correlationId;
-
-    response.setHeader('x-correlation-id', correlationId);
-    response.setHeader('x-run-id', runId);
-    Reflect.set(request, 'correlationId', correlationId);
-    Reflect.set(request, 'runId', runId);
-
+    const startedAt = Date.now();
     const body: unknown = request.body;
     const idempotencyKey = pickIdempotencyKey(body);
     const threadKey = resolveThreadKey(body);
+    const useJson = this.config.logging.format === 'json';
+    const threadLabel = threadKey ?? 'n/a';
+    const idempotencyLabel = idempotencyKey ?? 'n/a';
 
-    const formatMeta = (): string => {
-      const idempotencyLabel = idempotencyKey ?? 'n/a';
-      const threadLabel = threadKey ?? 'n/a';
+    response.setHeader('x-correlation-id', correlationId);
+    response.setHeader('x-run-id', runId);
 
-      return [
-        `runId=${runId}`,
-        `correlationId=${correlationId}`,
-        `idempotencyKey=${idempotencyLabel}`,
-        `threadKey=${threadLabel}`,
-      ].join(' ');
-    };
+    return this.requestContext.run(
+      {
+        correlationId,
+        threadKey,
+        idempotencyKey,
+      },
+      () =>
+        next.handle().pipe(
+          tap({
+            next: () => {
+              const durationMs = Date.now() - startedAt;
+              if (useJson) {
+                this.logger.log(
+                  {
+                    message: 'HTTP request completed',
+                    method,
+                    url,
+                    statusCode: response.statusCode,
+                    durationMs,
+                    runId,
+                  },
+                  'HTTP',
+                );
+                return;
+              }
 
-    return next.handle().pipe(
-      tap({
-        next: () => {
-          const duration = Date.now() - startedAt;
-          const statusCode = response.statusCode;
-          this.logger.log(
-            `${method} ${url} status=${statusCode} duration=${duration}ms ${formatMeta()}`,
-          );
-        },
-        error: (error: unknown) => {
-          const duration = Date.now() - startedAt;
-          const statusCode =
-            error instanceof HttpException
-              ? error.getStatus()
-              : response.statusCode;
-          this.logger.error(
-            `${method} ${url} status=${statusCode} duration=${duration}ms ${formatMeta()} message=${describeError(error)}`,
-          );
-        },
-      }),
+              this.prettyLogger.log(
+                `${method} ${url} status=${response.statusCode} duration=${durationMs}ms runId=${runId} threadKey=${threadLabel} idempotencyKey=${idempotencyLabel}`,
+              );
+            },
+            error: (error: unknown) => {
+              const durationMs = Date.now() - startedAt;
+              const statusCode =
+                error instanceof HttpException
+                  ? error.getStatus()
+                  : response.statusCode;
+              if (useJson) {
+                this.logger.error(
+                  {
+                    message: 'HTTP request failed',
+                    method,
+                    url,
+                    statusCode,
+                    durationMs,
+                    runId,
+                    error: describeError(error),
+                  },
+                  error instanceof Error ? error.stack : undefined,
+                  'HTTP',
+                );
+                return;
+              }
+
+              const reason = describeError(error);
+              this.prettyLogger.error(
+                `${method} ${url} status=${statusCode} duration=${durationMs}ms runId=${runId} threadKey=${threadLabel} idempotencyKey=${idempotencyLabel} message=${reason}`,
+              );
+            },
+          }),
+        ),
     );
   }
 }

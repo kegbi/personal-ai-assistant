@@ -1,4 +1,4 @@
-import { AppConfig } from './config.types';
+import { AppConfig, LogFormat, OTelExporter } from './config.types';
 import { DEFAULT_LLM_MODEL, DEFAULT_REDIS_HOST } from './config.defaults';
 
 const parseNumber = (value: string | undefined, fallback: number): number => {
@@ -8,6 +8,12 @@ const parseNumber = (value: string | undefined, fallback: number): number => {
 
 const parseBoolean = (value: string | undefined): boolean =>
   (value ?? '').trim().toLowerCase() === 'true';
+
+const parseLogFormat = (value: string | undefined): LogFormat =>
+  (value ?? '').trim().toLowerCase() === 'json' ? 'json' : 'pretty';
+
+const parseExporter = (value: string | undefined): OTelExporter =>
+  (value ?? '').trim().toLowerCase() === 'otlp' ? 'otlp' : 'console';
 
 export default (): AppConfig => ({
   app: {
@@ -41,5 +47,17 @@ export default (): AppConfig => ({
     enableCheckpointer: parseBoolean(process.env.ENABLE_CHECKPOINTER),
     enableStreaming: parseBoolean(process.env.ENABLE_STREAMING),
     enableIdempotency: parseBoolean(process.env.ENABLE_IDEMPOTENCY),
+  },
+  logging: {
+    format: parseLogFormat(process.env.LOG_FORMAT),
+  },
+  tracing: {
+    enabled: parseBoolean(process.env.ENABLE_OTEL_TRACING),
+    exporter: parseExporter(process.env.OTEL_EXPORTER),
+    otlpEndpoint:
+      process.env.OTEL_OTLP_ENDPOINT &&
+      process.env.OTEL_OTLP_ENDPOINT.trim().length > 0
+        ? process.env.OTEL_OTLP_ENDPOINT
+        : undefined,
   },
 });

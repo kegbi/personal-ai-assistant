@@ -5,10 +5,14 @@ import {
   AppConfig,
   AppSection,
   FeaturesSection,
+  LogFormat,
+  LoggingSection,
   MemorySection,
   MonicaSection,
+  OTelExporter,
   RemindersSection,
   RedisSection,
+  TracingSection,
 } from './config.types';
 
 type ConfigSectionGuard<TKey extends keyof AppConfig> = (
@@ -25,6 +29,12 @@ const isNumber = (value: unknown): value is number =>
 
 const isBoolean = (value: unknown): value is boolean =>
   typeof value === 'boolean';
+
+const isLogFormat = (value: unknown): value is LogFormat =>
+  value === 'json' || value === 'pretty';
+
+const isOtelExporter = (value: unknown): value is OTelExporter =>
+  value === 'console' || value === 'otlp';
 
 const isAppSection: ConfigSectionGuard<'app'> = (
   value: unknown,
@@ -72,6 +82,18 @@ const isFeaturesSection: ConfigSectionGuard<'features'> = (
   isBoolean(value.enableStreaming) &&
   isBoolean(value.enableIdempotency);
 
+const isLoggingSection: ConfigSectionGuard<'logging'> = (
+  value: unknown,
+): value is LoggingSection => isRecord(value) && isLogFormat(value.format);
+
+const isTracingSection: ConfigSectionGuard<'tracing'> = (
+  value: unknown,
+): value is TracingSection =>
+  isRecord(value) &&
+  isBoolean(value.enabled) &&
+  isOtelExporter(value.exporter) &&
+  (typeof value.otlpEndpoint === 'string' || value.otlpEndpoint === undefined);
+
 @Injectable()
 export class AppConfigService {
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}
@@ -102,6 +124,14 @@ export class AppConfigService {
 
   get features(): FeaturesSection {
     return this.readSection('features', isFeaturesSection);
+  }
+
+  get logging(): LoggingSection {
+    return this.readSection('logging', isLoggingSection);
+  }
+
+  get tracing(): TracingSection {
+    return this.readSection('tracing', isTracingSection);
   }
 
   /**
