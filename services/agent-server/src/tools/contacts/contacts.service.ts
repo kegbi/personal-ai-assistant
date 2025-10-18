@@ -53,4 +53,25 @@ export class ContactsService {
   async listContacts(chatId: string): Promise<ContactRecord[]> {
     return this.repository.list(chatId);
   }
+
+  /**
+   * Searches for contacts whose names match the provided query fragment.
+   *
+   * @param chatId Identifier for the chat scope to search within.
+   * @param query User-supplied name fragment.
+   * @param limit Optional maximum number of results; defaults to 5.
+   * @returns Matching contacts ordered by repository traversal order.
+   */
+  async searchContacts(
+    chatId: string,
+    query: string,
+    limit = 5,
+  ): Promise<ContactRecord[]> {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      return [];
+    }
+
+    return this.repository.searchByName(chatId, trimmedQuery, limit);
+  }
 }

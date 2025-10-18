@@ -33,4 +33,29 @@ export class ContactsRepository {
 
     return Promise.resolve(Array.from(byChat.values()));
   }
+
+  /**
+   * Performs a case-insensitive substring search across contact names for a chat.
+   *
+   * @param chatId Identifier for the chat the contacts belong to.
+   * @param query Search term supplied by the caller.
+   * @param limit Maximum number of results to return.
+   * @returns List of contacts whose names include the query fragment.
+   */
+  searchByName(
+    chatId: string,
+    query: string,
+    limit: number,
+  ): Promise<ContactRecord[]> {
+    const normalizedQuery = query.toLowerCase();
+    const boundedLimit = Math.max(limit, 0);
+
+    return this.list(chatId).then((contacts) =>
+      contacts
+        .filter((contact) =>
+          contact.name.toLowerCase().includes(normalizedQuery),
+        )
+        .slice(0, boundedLimit),
+    );
+  }
 }

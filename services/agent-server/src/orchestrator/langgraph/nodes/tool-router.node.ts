@@ -5,6 +5,7 @@ import { StructuredToolInterface, tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { RunnableConfig } from '@langchain/core/runnables';
 import { ContactsService } from '../../../tools/contacts/contacts.service';
+import { DatesService } from '../../../tools/dates/dates.service';
 import { MemoryService } from '../../../memory/memory.service';
 import { RemindersService } from '../../../api/reminders/reminders.service';
 
@@ -19,6 +20,11 @@ interface SetBirthdayArgs {
   birthday: string;
 }
 
+interface FindContactsArgs {
+  query: string;
+  limit?: number;
+}
+
 @Injectable()
 export class ToolRouterNode {
   private readonly logger = new Logger(ToolRouterNode.name);
@@ -29,8 +35,47 @@ export class ToolRouterNode {
     private readonly contactsService: ContactsService,
     private readonly memoryService: MemoryService,
     private readonly remindersService: RemindersService,
+    private readonly datesService: DatesService,
   ) {
     this.tools = [
+      tool(
+        async ({ query, limit }: FindContactsArgs, config?: RunnableConfig) => {
+          try {
+            const chatId = this.extractChatId(config);
+            const results = await this.contactsService.searchContacts(
+              chatId,
+              query,
+              limit,
+            );
+            const simplified = results.map((contact) => ({
+              id: contact.id,
+              name: contact.name,
+              birthday: contact.birthday ?? null,
+            }));
+            return JSON.stringify(simplified);
+          } catch (error) {
+            const reason =
+              error instanceof Error ? error.message : String(error);
+            this.logger.warn(`contacts_find_by_name failed: ${reason}`);
+            return '[]';
+          }
+        },
+        {
+          name: 'contacts_find_by_name',
+          description:
+            'Find existing contacts by a free-text name query. Use before updating a contact when only a name is provided. Returns JSON describing matches.',
+          schema: z.object({
+            query: z.string().min(1, 'query is required'),
+            limit: z
+              .number()
+              .int()
+              .positive()
+              .max(20)
+              .optional()
+              .describe('Maximum number of contacts to return (default: 5).'),
+          }),
+        },
+      ),
       tool(
         async (
           { name, birthday, contactId }: CreateContactArgs,
@@ -38,9 +83,20 @@ export class ToolRouterNode {
         ) => {
           try {
             const chatId = this.extractChatId(config);
+            const trimmedBirthday =
+              birthday && birthday.trim().length > 0 ? birthday : undefined;
+            const normalizedBirthday =
+              trimmedBirthday !== undefined
+                ? this.datesService.normalizeToISO(trimmedBirthday)
+                : null;
+
+            if (trimmedBirthday !== undefined && !normalizedBirthday) {
+              return 'Unable to understand the provided birthday. Please use a full date like 1991-05-14.';
+            }
+
             const contact = await this.contactsService.createContact(chatId, {
               name,
-              birthday,
+              birthday: normalizedBirthday ?? undefined,
               id: contactId,
             });
 
@@ -65,13 +121,15 @@ export class ToolRouterNode {
         {
           name: 'contacts_create',
           description:
-            'Create a personal contact for the current chat. Provide name and optional birthday (ISO date). Returns the stored contact id.',
+            'Create a personal contact for the current chat. Provide name and optional birthday in any common format. Returns the stored contact id.',
           schema: z.object({
             name: z.string().min(1, 'Name is required'),
             birthday: z
               .string()
               .optional()
-              .describe('Birthday in ISO format (YYYY-MM-DD) if known'),
+              .describe(
+                'Birthday for the contact. Free-form input is accepted and normalized automatically.',
+              ),
             contactId: z
               .string()
               .optional()
@@ -121,10 +179,16 @@ export class ToolRouterNode {
               return 'No contact id provided and no recent contact is known.';
             }
 
+            const normalizedBirthday =
+              this.datesService.normalizeToISO(birthday);
+            if (!normalizedBirthday) {
+              return 'Unable to understand the provided birthday. Please use a full date like 1991-05-14.';
+            }
+
             const updated = await this.contactsService.setBirthday(
               chatId,
               targetId,
-              birthday,
+              normalizedBirthday,
             );
 
             return `Updated birthday for ${updated.name} (id: ${updated.id}) to ${updated.birthday}.`;
@@ -151,7 +215,9 @@ export class ToolRouterNode {
             birthday: z
               .string()
               .min(4, 'birthday is required')
-              .describe('Birthday in ISO format (YYYY-MM-DD)'),
+              .describe(
+                'Birthday for the contact. Free-form input is accepted and normalized automatically.',
+              ),
           }),
         },
       ),
