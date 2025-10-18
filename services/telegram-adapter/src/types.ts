@@ -1,8 +1,11 @@
+export type MessagePayloadType = 'text' | 'voice' | 'command' | 'other';
+
 export interface MessageReceivedPayload {
   connectorId?: string;
   idempotencyKey?: string;
   chatId: string;
   userId: string;
+  type: MessagePayloadType;
   text?: string;
   voiceUrl?: string;
   isCommand?: boolean;

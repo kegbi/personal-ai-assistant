@@ -144,6 +144,7 @@ export class TelegramBridge {
       const basePayload = this.buildBasePayload(ctx);
       await this.forwardToAgent(ctx, {
         ...basePayload,
+        type: 'command',
         isCommand: true,
         command,
         text: text,
@@ -159,6 +160,7 @@ export class TelegramBridge {
       const basePayload = this.buildBasePayload(ctx);
       await this.forwardToAgent(ctx, {
         ...basePayload,
+        type: 'text',
         text,
       });
     });
@@ -178,6 +180,7 @@ export class TelegramBridge {
 
       await this.forwardToAgent(ctx, {
         ...basePayload,
+        type: 'voice',
         text: caption,
         voiceUrl,
         payload: {
@@ -197,6 +200,7 @@ export class TelegramBridge {
 
       await this.forwardToAgent(ctx, {
         ...this.buildBasePayload(ctx),
+        type: 'other',
         text: this.describeUnsupportedMessage(message),
       });
     });
@@ -208,7 +212,7 @@ export class TelegramBridge {
    * @param ctx Grammy context that carries the inbound update.
    * @returns Base payload forwarded to the agent service.
    */
-  private buildBasePayload(ctx: Context): MessageReceivedPayload {
+  private buildBasePayload(ctx: Context): MessagePayloadWithoutType {
     const chatId = ctx.chat?.id ? String(ctx.chat.id) : 'unknown';
     const userId = ctx.from?.id ? String(ctx.from.id) : chatId;
     const idempotencyKey = String(ctx.update.update_id);
@@ -556,3 +560,5 @@ export class TelegramBridge {
     }
   }
 }
+
+type MessagePayloadWithoutType = Omit<MessageReceivedPayload, 'type'>;
