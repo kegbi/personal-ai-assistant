@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   MessagesAnnotation,
   START,
@@ -9,6 +9,10 @@ import {
 import { PlannerNode } from './nodes/planner.node';
 import { ToolRouterNode } from './nodes/tool-router.node';
 import { AppConfigService } from '../../config/config.service';
+import {
+  CHECKPOINTER_STRATEGY,
+  type CheckpointerStrategy,
+} from '../graph/checkpointer-strategy';
 
 export type CompiledGraph = ReturnType<
   StateGraph<typeof MessagesAnnotation>['compile']
@@ -23,10 +27,15 @@ export class GraphFactory {
     private readonly plannerNode: PlannerNode,
     private readonly toolRouterNode: ToolRouterNode,
     private readonly configService: AppConfigService,
+    @Optional()
+    @Inject(CHECKPOINTER_STRATEGY)
+    private readonly checkpointerStrategy?: CheckpointerStrategy,
   ) {}
 
   build(): CompiledGraph {
-    const enableCheckpointer = this.configService.features.enableCheckpointer;
+    const enableCheckpointer =
+      this.checkpointerStrategy?.isEnabled() ??
+      this.configService.features.enableCheckpointer;
 
     if (
       !this.compiledGraph ||

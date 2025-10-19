@@ -1,29 +1,17 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
-import {
-  AIMessage,
-  BaseMessage,
-  HumanMessage,
-  MessageContent,
-  isAIMessage,
-  isBaseMessage,
-} from '@langchain/core/messages';
+import { BaseMessage, isAIMessage } from '@langchain/core/messages';
 import { NormalizedEventDto } from '../api/transport/dto/normalized-event.dto';
 import { buildThreadKey } from '../common/keys.util';
-import { MemoryService } from '../memory/memory.service';
 import { AgentResponseDto } from '../transport/dto/agent-response.dto';
 import type { AgentStreamEvent } from '../transport/dto/agent-stream-event.dto';
 import { CommandRouter } from './command-router.service';
-import { GraphFactory, type CompiledGraph } from './langgraph/graph.factory';
-import { GeneratedMessagePersisterService } from './messages/generated-message-persister.service';
 import type { MessageSerializer } from './messages/interfaces/message-serializer';
-import { HistoryBuilderService } from './messages/history-builder.service';
 import { MESSAGE_SERIALIZER } from './messages/tokens';
-import { InputNormalizer } from './input-normalizer.service';
-import { ResponseBuilder } from './response-builder.service';
 import { AppConfigService } from '../config/config.service';
 import { RequestContext } from '../common/request-context';
+import { ConversationOrchestrator } from './conversation/conversation-orchestrator';
 
 /**
  * Coordinates the orchestration pipeline, connecting memory, LangGraph, and response shaping.
@@ -31,24 +19,16 @@ import { RequestContext } from '../common/request-context';
 @Injectable()
 export class OrchestratorService {
   private readonly logger = new Logger(OrchestratorService.name);
-  private readonly graph: CompiledGraph;
   private readonly tracer = trace.getTracer('agent.orchestrator');
 
   constructor(
-    private readonly memoryService: MemoryService,
-    private readonly graphFactory: GraphFactory,
-    private readonly historyBuilder: HistoryBuilderService,
-    private readonly generatedMessagePersister: GeneratedMessagePersisterService,
     private readonly commandRouter: CommandRouter,
-    private readonly inputNormalizer: InputNormalizer,
-    private readonly responseBuilder: ResponseBuilder,
     private readonly configService: AppConfigService,
     private readonly requestContext: RequestContext,
+    private readonly conversationOrchestrator: ConversationOrchestrator,
     @Inject(MESSAGE_SERIALIZER)
     private readonly messageSerializer: MessageSerializer,
-  ) {
-    this.graph = this.graphFactory.build();
-  }
+  ) {}
 
   /**
    * Routes inbound events through the orchestration stack to produce an assistant reply.
@@ -83,118 +63,58 @@ export class OrchestratorService {
           return response;
         }
 
-        const userContent = this.inputNormalizer.toText(event);
         const useCheckpointer =
           this.configService.features.enableCheckpointer === true;
 
-        if (useCheckpointer) {
-          this.logDebug('Invoking LangGraph', {
-            threadKey,
-            mode: 'checkpointer',
-          });
+        const outcome = await this.conversationOrchestrator.handle({
+          threadKey,
+          chatId: event.chatId,
+          event,
+          useCheckpointer,
+        });
 
-          const result = await this.graph.invoke(
-            { messages: [new HumanMessage(userContent)] },
-            { configurable: { thread_id: threadKey, chatId: threadKey } },
+        const messages = outcome.transcript;
+        const generatedMessages = messages.slice(outcome.generatedFromIndex);
+
+        if (!messages.some((message) => isAIMessage(message))) {
+          this.logger.warn(
+            `LangGraph completed without an assistant response (mode=${outcome.mode} threadKey=${threadKey})`,
           );
+        }
 
-          const rawMessages = Array.isArray(result.messages)
-            ? result.messages
-            : [];
-          const messages = rawMessages.filter(
-            (message): message is BaseMessage => isBaseMessage(message),
-          );
-          const elapsedMs = Date.now() - startedAt;
-
+        if (outcome.mode === 'checkpointer') {
           this.logDebug('LangGraph completed', {
             threadKey,
             mode: 'checkpointer',
             messageCount: messages.length,
-            elapsedMs,
+            elapsedMs: outcome.elapsedMs,
             messages: this.describeMessages(messages),
           });
 
-          if (!messages.some((message) => isAIMessage(message))) {
-            this.logger.warn(
-              `LangGraph completed without an assistant response (mode=checkpointer threadKey=${threadKey})`,
-            );
-          }
-
           span.setAttribute('app.mode', 'checkpointer');
-          span.setAttribute('app.elapsed_ms', elapsedMs);
+          span.setAttribute('app.elapsed_ms', outcome.elapsedMs);
           span.setAttribute('app.message_count', messages.length);
           span.setStatus({ code: SpanStatusCode.OK });
-          return this.responseBuilder.build(
-            event.chatId,
-            messages,
-            0,
-            elapsedMs,
-          );
+
+          return outcome.response;
         }
-
-        await this.memoryService.pushMessage(threadKey, {
-          role: 'user',
-          content: userContent,
-          meta: this.inputNormalizer.userMeta(event),
-        });
-
-        const window = await this.memoryService.getWindow(threadKey);
-        const history = this.historyBuilder.buildHistory(window);
-        const initialLength = history.length;
-
-        this.logDebug('Invoking LangGraph', {
-          threadKey,
-          mode: 'memory',
-          historyLength: history.length,
-          windowLength: window.length,
-        });
-
-        const result = await this.graph.invoke(
-          { messages: history },
-          { configurable: { chatId: threadKey } },
-        );
-
-        const rawMessages = Array.isArray(result.messages)
-          ? result.messages
-          : [];
-        const messages = rawMessages.filter((message): message is BaseMessage =>
-          isBaseMessage(message),
-        );
-        const generatedIndex = initialLength;
-        const generatedMessages = messages.slice(generatedIndex);
-        const elapsedMs = Date.now() - startedAt;
 
         this.logDebug('LangGraph completed', {
           threadKey,
           mode: 'memory',
           generatedCount: generatedMessages.length,
-          elapsedMs,
+          elapsedMs: outcome.elapsedMs,
           messages: this.describeMessages(generatedMessages),
         });
 
-        await this.generatedMessagePersister.persistGeneratedMessages(
-          threadKey,
-          generatedMessages,
-        );
-
-        if (!messages.some((message) => isAIMessage(message))) {
-          this.logger.warn(
-            `LangGraph completed without an assistant response (threadKey=${threadKey})`,
-          );
-        }
-
         span.setAttribute('app.mode', 'memory');
-        span.setAttribute('app.elapsed_ms', elapsedMs);
+        span.setAttribute('app.elapsed_ms', outcome.elapsedMs);
         span.setAttribute('app.generated_count', generatedMessages.length);
-        span.setAttribute('app.history_length', history.length);
+        span.setAttribute('app.history_length', outcome.generatedFromIndex);
+        span.setAttribute('app.window_length', outcome.windowLength);
         span.setStatus({ code: SpanStatusCode.OK });
 
-        return this.responseBuilder.build(
-          event.chatId,
-          messages,
-          generatedIndex,
-          elapsedMs,
-        );
+        return outcome.response;
       } catch (error) {
         span.recordException(
           error instanceof Error ? error : this.describeError(error),
@@ -246,177 +166,43 @@ export class OrchestratorService {
     try {
       const useCheckpointer =
         this.configService.features.enableCheckpointer === true;
-      const userContent = this.inputNormalizer.toText(event);
 
-      let history: BaseMessage[] = [];
-      let generatedIndex = 0;
-      let windowLength = 0;
+      const stream = this.conversationOrchestrator.stream({
+        threadKey,
+        chatId: event.chatId,
+        event,
+        useCheckpointer,
+      });
 
-      if (useCheckpointer) {
-        history = [new HumanMessage(userContent)];
-        windowLength = history.length;
-        this.logDebug('Streaming LangGraph', {
-          threadKey,
-          mode: 'checkpointer',
-          historyLength: history.length,
-        });
-      } else {
-        await this.memoryService.pushMessage(threadKey, {
-          role: 'user',
-          content: userContent,
-          meta: this.inputNormalizer.userMeta(event),
-        });
-
-        const window = await this.memoryService.getWindow(threadKey);
-        windowLength = window.length;
-        history = this.historyBuilder.buildHistory(window);
-        generatedIndex = history.length;
-
-        this.logDebug('Streaming LangGraph', {
-          threadKey,
-          mode: 'memory',
-          historyLength: history.length,
-          windowLength,
-        });
+      for await (const chunk of stream.events) {
+        yield chunk;
       }
 
-      const streamIterator = await this.graph.stream(
-        { messages: history },
-        useCheckpointer
-          ? {
-              configurable: { thread_id: threadKey, chatId: threadKey },
-              streamMode: ['messages', 'values'],
-            }
-          : {
-              configurable: { chatId: threadKey },
-              streamMode: ['messages', 'values'],
-            },
-      );
-
-      const iterable: AsyncIterable<unknown> = streamIterator;
-      const messageTextById = new Map<string, string>();
-      const emittedToolCallIds = new Set<string>();
-      let finalMessages: BaseMessage[] = history;
-      let fallbackMessageIndex = 0;
-
-      const isStreamEntry = (
-        value: unknown,
-      ): value is readonly [string, unknown] =>
-        Array.isArray(value) &&
-        value.length === 2 &&
-        typeof value[0] === 'string';
-
-      const isMessageArray = (value: unknown): value is BaseMessage[] =>
-        Array.isArray(value) && value.every((item) => isBaseMessage(item));
-
-      const isStateSnapshot = (
-        value: unknown,
-      ): value is { messages: BaseMessage[] } =>
-        this.isRecord(value) && isMessageArray(value.messages);
-
-      const resolveMessageKey = (message: AIMessage): string => {
-        if (typeof message.id === 'string' && message.id.length > 0) {
-          return message.id;
-        }
-        const key = `ai-${fallbackMessageIndex}`;
-        fallbackMessageIndex += 1;
-        return key;
-      };
-
-      for await (const item of iterable) {
-        if (!isStreamEntry(item)) {
-          continue;
-        }
-
-        const [mode, payload] = item;
-
-        if (mode === 'messages' && isMessageArray(payload)) {
-          for (const message of payload) {
-            if (!isAIMessage(message)) {
-              continue;
-            }
-
-            const messageKey = resolveMessageKey(message);
-            const nextText = this.extractTextFromContent(message.content);
-            const previousText = messageTextById.get(messageKey);
-            let deltaText = '';
-
-            if (previousText === undefined) {
-              deltaText = nextText;
-            } else if (nextText.startsWith(previousText)) {
-              deltaText = nextText.slice(previousText.length);
-            } else {
-              deltaText = nextText;
-            }
-
-            if (deltaText.length > 0) {
-              yield {
-                type: 'delta',
-                text: deltaText,
-              };
-            }
-
-            messageTextById.set(messageKey, nextText);
-
-            const toolEvents = this.collectToolEvents(
-              message,
-              emittedToolCallIds,
-            );
-
-            for (const eventChunk of toolEvents) {
-              yield eventChunk;
-            }
-          }
-        } else if (mode === 'values' && isStateSnapshot(payload)) {
-          finalMessages = payload.messages;
-        }
-      }
-
-      const elapsedMs = Date.now() - startedAt;
-      const modeLabel = useCheckpointer ? 'checkpointer' : 'memory';
-
-      if (!finalMessages.length) {
-        finalMessages = history;
-      }
-
-      if (!useCheckpointer) {
-        const generatedMessages = finalMessages.slice(generatedIndex);
-        await this.generatedMessagePersister.persistGeneratedMessages(
-          threadKey,
-          generatedMessages,
-        );
-        span.setAttribute('app.generated_count', generatedMessages.length);
-        span.setAttribute('app.history_length', history.length);
-      } else {
-        span.setAttribute('app.generated_count', finalMessages.length);
-        span.setAttribute('app.history_length', windowLength);
-      }
-
-      const response = this.responseBuilder.build(
-        event.chatId,
-        finalMessages,
-        useCheckpointer ? 0 : generatedIndex,
-        elapsedMs,
-      );
+      const outcome = await stream.result;
+      const messages = outcome.transcript;
+      const generatedMessages = messages.slice(outcome.generatedFromIndex);
 
       this.logDebug('LangGraph streaming completed', {
         threadKey,
-        mode: modeLabel,
-        elapsedMs,
-        messageCount: finalMessages.length,
-        messages: this.describeMessages(finalMessages),
+        mode: outcome.mode,
+        elapsedMs: outcome.elapsedMs,
+        messageCount: messages.length,
+        messages: this.describeMessages(messages),
       });
 
-      span.setAttribute('app.mode', modeLabel);
-      span.setAttribute('app.elapsed_ms', elapsedMs);
-      span.setAttribute('app.message_count', finalMessages.length);
-      span.setStatus({ code: SpanStatusCode.OK });
+      if (outcome.mode === 'memory') {
+        span.setAttribute('app.generated_count', generatedMessages.length);
+        span.setAttribute('app.history_length', outcome.generatedFromIndex);
+        span.setAttribute('app.window_length', outcome.windowLength);
+      } else {
+        span.setAttribute('app.generated_count', messages.length);
+        span.setAttribute('app.history_length', outcome.windowLength);
+      }
 
-      yield {
-        type: 'final',
-        text: response.text,
-        meta: response.meta,
-      };
+      span.setAttribute('app.mode', outcome.mode);
+      span.setAttribute('app.elapsed_ms', outcome.elapsedMs);
+      span.setAttribute('app.message_count', messages.length);
+      span.setStatus({ code: SpanStatusCode.OK });
     } catch (error) {
       span.recordException(
         error instanceof Error ? error : this.describeError(error),
@@ -511,96 +297,6 @@ export class OrchestratorService {
     }
 
     return '[unknown]';
-  }
-
-  private extractTextFromContent(content: MessageContent): string {
-    if (typeof content === 'string') {
-      return content;
-    }
-
-    const parts: string[] = [];
-    for (const segment of content) {
-      if (!this.isRecord(segment)) {
-        continue;
-      }
-
-      const typeField: unknown = Reflect.get(segment, 'type');
-      if (typeField === 'text') {
-        const textField: unknown = Reflect.get(segment, 'text');
-        if (typeof textField === 'string') {
-          parts.push(textField);
-        }
-      }
-    }
-
-    return parts.join('');
-  }
-
-  private collectToolEvents(
-    message: AIMessage,
-    emittedToolCallIds: Set<string>,
-  ): AgentStreamEvent[] {
-    const events: AgentStreamEvent[] = [];
-    const toolCalls = message.tool_calls;
-
-    if (!Array.isArray(toolCalls)) {
-      return events;
-    }
-
-    for (let index = 0; index < toolCalls.length; index += 1) {
-      const call = toolCalls[index];
-      const name = call?.name;
-
-      if (typeof name !== 'string' || name.length === 0) {
-        continue;
-      }
-
-      const callId =
-        typeof call.id === 'string' && call.id.length > 0
-          ? call.id
-          : `${message.id ?? 'tool'}:${index}`;
-
-      if (emittedToolCallIds.has(callId)) {
-        continue;
-      }
-
-      const normalizedArgs = this.normalizeToolArgs(call.args);
-      if (!normalizedArgs) {
-        continue;
-      }
-
-      emittedToolCallIds.add(callId);
-      events.push({
-        type: 'tool',
-        name,
-        args: normalizedArgs,
-      });
-    }
-
-    return events;
-  }
-
-  private normalizeToolArgs(args: unknown): Record<string, unknown> | null {
-    if (this.isRecord(args)) {
-      return args;
-    }
-
-    if (typeof args === 'string') {
-      try {
-        const parsed: unknown = JSON.parse(args);
-        if (this.isRecord(parsed)) {
-          return parsed;
-        }
-      } catch {
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  private isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   private describeMessages(messages: BaseMessage[]): string[] {
