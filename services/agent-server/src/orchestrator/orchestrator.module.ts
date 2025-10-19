@@ -8,6 +8,8 @@ import { LanggraphModule } from './langgraph/langgraph.module';
 import { MessagesModule } from './messages/messages.module';
 import { OrchestratorService } from './orchestrator.service';
 import { ResponseBuilder } from './response-builder.service';
+import { ConversationStore } from './conversation/conversation-store';
+import { TranscriptAssembler } from './conversation/transcript-assembler';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { ResponseBuilder } from './response-builder.service';
     CommandRouter,
     InputNormalizer,
     ResponseBuilder,
+    ConversationStore,
+    TranscriptAssembler,
   ],
   exports: [OrchestratorService],
 })

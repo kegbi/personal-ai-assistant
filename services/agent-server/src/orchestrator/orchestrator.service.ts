@@ -1,21 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
-import {
-  BaseMessage,
-  HumanMessage,
-  isAIMessage,
-} from '@langchain/core/messages';
+import { BaseMessage, isAIMessage } from '@langchain/core/messages';
 import { NormalizedEventDto } from '../api/transport/dto/normalized-event.dto';
 import { buildThreadKey } from '../common/keys.util';
-import { MemoryService } from '../memory/memory.service';
 import { AgentResponseDto } from '../transport/dto/agent-response.dto';
 import type { AgentStreamEvent } from '../transport/dto/agent-stream-event.dto';
 import { CommandRouter } from './command-router.service';
 import { GraphFactory } from './langgraph/graph.factory';
 import { GeneratedMessagePersisterService } from './messages/generated-message-persister.service';
 import type { MessageSerializer } from './messages/interfaces/message-serializer';
-import { HistoryBuilderService } from './messages/history-builder.service';
 import { MESSAGE_SERIALIZER } from './messages/tokens';
 import { InputNormalizer } from './input-normalizer.service';
 import { ResponseBuilder } from './response-builder.service';
@@ -27,6 +21,8 @@ import type {
   GraphStreamChunk,
 } from './graph/graph-driver';
 import { DefaultGraphDriver } from './graph/default-graph-driver';
+import { ConversationStore } from './conversation/conversation-store';
+import { TranscriptAssembler } from './conversation/transcript-assembler';
 
 /**
  * Coordinates the orchestration pipeline, connecting memory, LangGraph, and response shaping.
@@ -38,15 +34,15 @@ export class OrchestratorService {
   private readonly tracer = trace.getTracer('agent.orchestrator');
 
   constructor(
-    private readonly memoryService: MemoryService,
     private readonly graphFactory: GraphFactory,
-    private readonly historyBuilder: HistoryBuilderService,
     private readonly generatedMessagePersister: GeneratedMessagePersisterService,
     private readonly commandRouter: CommandRouter,
     private readonly inputNormalizer: InputNormalizer,
     private readonly responseBuilder: ResponseBuilder,
     private readonly configService: AppConfigService,
     private readonly requestContext: RequestContext,
+    private readonly conversationStore: ConversationStore,
+    private readonly transcriptAssembler: TranscriptAssembler,
     @Inject(MESSAGE_SERIALIZER)
     private readonly messageSerializer: MessageSerializer,
   ) {
@@ -95,23 +91,22 @@ export class OrchestratorService {
         let windowLength = 0;
 
         if (useCheckpointer) {
-          history = [new HumanMessage(userContent)];
+          const assembly =
+            this.transcriptAssembler.buildForCheckpointer(userContent);
+          history = assembly.transcript;
+          generatedFromIndex = assembly.generatedFromIndex;
           windowLength = history.length;
           this.logDebug('Invoking LangGraph', {
             threadKey,
             mode: 'checkpointer',
           });
         } else {
-          await this.memoryService.pushMessage(threadKey, {
-            role: 'user',
-            content: userContent,
-            meta: this.inputNormalizer.userMeta(event),
-          });
-
-          const window = await this.memoryService.getWindow(threadKey);
+          await this.conversationStore.appendUser(threadKey, event);
+          const window = await this.conversationStore.loadWindow(threadKey);
           windowLength = window.length;
-          history = this.historyBuilder.buildHistory(window);
-          generatedFromIndex = history.length;
+          const assembly = this.transcriptAssembler.buildFromWindow(window);
+          history = assembly.transcript;
+          generatedFromIndex = assembly.generatedFromIndex;
 
           this.logDebug('Invoking LangGraph', {
             threadKey,
@@ -247,7 +242,10 @@ export class OrchestratorService {
       let windowLength = 0;
 
       if (useCheckpointer) {
-        history = [new HumanMessage(userContent)];
+        const assembly =
+          this.transcriptAssembler.buildForCheckpointer(userContent);
+        history = assembly.transcript;
+        generatedIndex = assembly.generatedFromIndex;
         windowLength = history.length;
         this.logDebug('Streaming LangGraph', {
           threadKey,
@@ -255,16 +253,12 @@ export class OrchestratorService {
           historyLength: history.length,
         });
       } else {
-        await this.memoryService.pushMessage(threadKey, {
-          role: 'user',
-          content: userContent,
-          meta: this.inputNormalizer.userMeta(event),
-        });
-
-        const window = await this.memoryService.getWindow(threadKey);
+        await this.conversationStore.appendUser(threadKey, event);
+        const window = await this.conversationStore.loadWindow(threadKey);
         windowLength = window.length;
-        history = this.historyBuilder.buildHistory(window);
-        generatedIndex = history.length;
+        const assembly = this.transcriptAssembler.buildFromWindow(window);
+        history = assembly.transcript;
+        generatedIndex = assembly.generatedFromIndex;
 
         this.logDebug('Streaming LangGraph', {
           threadKey,
