@@ -3,12 +3,16 @@ import type { BaseMessage } from '@langchain/core/messages';
 import type { NormalizedEventDto } from '../../api/transport/dto/normalized-event.dto';
 import type { AgentResponseDto } from '../../transport/dto/agent-response.dto';
 import type { AgentStreamEvent } from '../../transport/dto/agent-stream-event.dto';
-import type { GraphDriver, GraphStreamChunk } from '../graph/graph-driver';
+import type {
+  GraphDriver,
+  GraphInternalChunk,
+  GraphStreamChunk,
+} from '../graph/graph-driver';
 import { GRAPH_DRIVER } from '../graph/graph-driver';
-import type { ConversationStore } from './conversation-store';
-import type { TranscriptAssembler } from './transcript-assembler';
-import type { TranscriptPersister } from './transcript-persister';
-import type { ResponseComposer } from './response-composer';
+import { ConversationStore } from './conversation-store';
+import { TranscriptAssembler } from './transcript-assembler';
+import { TranscriptPersister } from './transcript-persister';
+import { ResponseComposer } from './response-composer';
 import { InputNormalizer } from '../input-normalizer.service';
 
 export interface ConversationHandleInput {
@@ -177,7 +181,9 @@ export class ConversationOrchestrator {
             continue;
           }
 
-          yield chunk as AgentStreamEvent;
+          if (ConversationOrchestrator.isAgentStreamEvent(chunk)) {
+            yield chunk;
+          }
         }
 
         const transcript = finalMessages ?? history;
@@ -226,15 +232,18 @@ export class ConversationOrchestrator {
 
   private static isInternalGraphChunk(
     chunk: GraphStreamChunk,
-  ): chunk is GraphStreamChunk & {
-    kind: 'internal';
-    messages?: BaseMessage[];
-  } {
-    return (chunk as GraphInternalLike).kind === 'internal';
+  ): chunk is GraphInternalChunk {
+    return (
+      typeof chunk === 'object' &&
+      chunk !== null &&
+      'kind' in chunk &&
+      chunk.kind === 'internal'
+    );
   }
-}
 
-interface GraphInternalLike {
-  readonly kind?: unknown;
-  readonly messages?: unknown;
+  private static isAgentStreamEvent(
+    chunk: GraphStreamChunk,
+  ): chunk is AgentStreamEvent {
+    return typeof chunk === 'object' && chunk !== null && 'type' in chunk;
+  }
 }
