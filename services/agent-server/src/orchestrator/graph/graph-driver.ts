@@ -50,3 +50,5 @@ export interface GraphDriver {
    */
   stream(input: RunInput): AsyncGenerator<GraphStreamChunk>;
 }
+
+export const GRAPH_DRIVER = Symbol('GRAPH_DRIVER');

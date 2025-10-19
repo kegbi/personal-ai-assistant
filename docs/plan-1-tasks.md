@@ -26,7 +26,7 @@
 - [x] Update orchestrator flow to use the new services.
 
 ## Step 5 – Introduce ConversationOrchestrator Façade
-- [ ] Implement `ConversationOrchestrator` for non-command run and stream execution.
-- [ ] Ensure façade coordinates helpers, persistence, and graph driver correctly.
-- [ ] Add unit/integration-style tests for handle/handleStream paths.
-- [ ] Delegate from `OrchestratorService` to the new façade while retaining spans/logging.
+- [x] Implement `ConversationOrchestrator` for non-command run and stream execution.
+- [x] Ensure façade coordinates helpers, persistence, and graph driver correctly.
+- [x] Add unit/integration-style tests for handle/handleStream paths.
+- [x] Delegate from `OrchestratorService` to the new façade while retaining spans/logging.

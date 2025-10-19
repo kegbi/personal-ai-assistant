@@ -12,6 +12,10 @@ import { ConversationStore } from './conversation/conversation-store';
 import { TranscriptAssembler } from './conversation/transcript-assembler';
 import { TranscriptPersister } from './conversation/transcript-persister';
 import { ResponseComposer } from './conversation/response-composer';
+import { ConversationOrchestrator } from './conversation/conversation-orchestrator';
+import { GraphFactory } from './langgraph/graph.factory';
+import { DefaultGraphDriver } from './graph/default-graph-driver';
+import { GRAPH_DRIVER } from './graph/graph-driver';
 
 @Module({
   imports: [
@@ -30,6 +34,13 @@ import { ResponseComposer } from './conversation/response-composer';
     TranscriptAssembler,
     TranscriptPersister,
     ResponseComposer,
+    ConversationOrchestrator,
+    {
+      provide: GRAPH_DRIVER,
+      useFactory: (factory: GraphFactory) =>
+        new DefaultGraphDriver(factory.build()),
+      inject: [GraphFactory],
+    },
   ],
   exports: [OrchestratorService],
 })

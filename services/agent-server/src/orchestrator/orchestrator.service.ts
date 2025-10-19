@@ -7,22 +7,11 @@ import { buildThreadKey } from '../common/keys.util';
 import { AgentResponseDto } from '../transport/dto/agent-response.dto';
 import type { AgentStreamEvent } from '../transport/dto/agent-stream-event.dto';
 import { CommandRouter } from './command-router.service';
-import { GraphFactory } from './langgraph/graph.factory';
 import type { MessageSerializer } from './messages/interfaces/message-serializer';
 import { MESSAGE_SERIALIZER } from './messages/tokens';
-import { InputNormalizer } from './input-normalizer.service';
 import { AppConfigService } from '../config/config.service';
 import { RequestContext } from '../common/request-context';
-import type {
-  GraphDriver,
-  GraphInternalChunk,
-  GraphStreamChunk,
-} from './graph/graph-driver';
-import { DefaultGraphDriver } from './graph/default-graph-driver';
-import { ConversationStore } from './conversation/conversation-store';
-import { TranscriptAssembler } from './conversation/transcript-assembler';
-import { TranscriptPersister } from './conversation/transcript-persister';
-import { ResponseComposer } from './conversation/response-composer';
+import { ConversationOrchestrator } from './conversation/conversation-orchestrator';
 
 /**
  * Coordinates the orchestration pipeline, connecting memory, LangGraph, and response shaping.
@@ -30,24 +19,16 @@ import { ResponseComposer } from './conversation/response-composer';
 @Injectable()
 export class OrchestratorService {
   private readonly logger = new Logger(OrchestratorService.name);
-  private readonly graphDriver: GraphDriver;
   private readonly tracer = trace.getTracer('agent.orchestrator');
 
   constructor(
-    private readonly graphFactory: GraphFactory,
     private readonly commandRouter: CommandRouter,
-    private readonly inputNormalizer: InputNormalizer,
     private readonly configService: AppConfigService,
     private readonly requestContext: RequestContext,
-    private readonly conversationStore: ConversationStore,
-    private readonly transcriptAssembler: TranscriptAssembler,
-    private readonly transcriptPersister: TranscriptPersister,
-    private readonly responseComposer: ResponseComposer,
+    private readonly conversationOrchestrator: ConversationOrchestrator,
     @Inject(MESSAGE_SERIALIZER)
     private readonly messageSerializer: MessageSerializer,
-  ) {
-    this.graphDriver = new DefaultGraphDriver(this.graphFactory.build());
-  }
+  ) {}
 
   /**
    * Routes inbound events through the orchestration stack to produce an assistant reply.
@@ -82,109 +63,58 @@ export class OrchestratorService {
           return response;
         }
 
-        const userContent = this.inputNormalizer.toText(event);
         const useCheckpointer =
           this.configService.features.enableCheckpointer === true;
 
-        let history: BaseMessage[] = [];
-        let generatedFromIndex = 0;
-        let windowLength = 0;
-
-        if (useCheckpointer) {
-          const assembly =
-            this.transcriptAssembler.buildForCheckpointer(userContent);
-          history = assembly.transcript;
-          generatedFromIndex = assembly.generatedFromIndex;
-          windowLength = history.length;
-          this.logDebug('Invoking LangGraph', {
-            threadKey,
-            mode: 'checkpointer',
-          });
-        } else {
-          await this.conversationStore.appendUser(threadKey, event);
-          const window = await this.conversationStore.loadWindow(threadKey);
-          windowLength = window.length;
-          const assembly = this.transcriptAssembler.buildFromWindow(window);
-          history = assembly.transcript;
-          generatedFromIndex = assembly.generatedFromIndex;
-
-          this.logDebug('Invoking LangGraph', {
-            threadKey,
-            mode: 'memory',
-            historyLength: history.length,
-            windowLength,
-          });
-        }
-
-        const runResult = await this.graphDriver.run({
-          history,
+        const outcome = await this.conversationOrchestrator.handle({
           threadKey,
-          generatedFromIndex,
+          chatId: event.chatId,
+          event,
           useCheckpointer,
         });
 
-        const messages = runResult.transcript;
-        const elapsedMs = runResult.elapsedMs;
-        const generatedIndex = runResult.generatedFromIndex;
+        const messages = outcome.transcript;
+        const generatedMessages = messages.slice(outcome.generatedFromIndex);
 
         if (!messages.some((message) => isAIMessage(message))) {
-          const modeLabel = useCheckpointer ? 'checkpointer' : 'memory';
           this.logger.warn(
-            `LangGraph completed without an assistant response (mode=${modeLabel} threadKey=${threadKey})`,
+            `LangGraph completed without an assistant response (mode=${outcome.mode} threadKey=${threadKey})`,
           );
         }
 
-        if (useCheckpointer) {
+        if (outcome.mode === 'checkpointer') {
           this.logDebug('LangGraph completed', {
             threadKey,
             mode: 'checkpointer',
             messageCount: messages.length,
-            elapsedMs,
+            elapsedMs: outcome.elapsedMs,
             messages: this.describeMessages(messages),
           });
 
           span.setAttribute('app.mode', 'checkpointer');
-          span.setAttribute('app.elapsed_ms', elapsedMs);
+          span.setAttribute('app.elapsed_ms', outcome.elapsedMs);
           span.setAttribute('app.message_count', messages.length);
           span.setStatus({ code: SpanStatusCode.OK });
 
-          return this.responseComposer.compose(
-            event.chatId,
-            messages,
-            generatedIndex,
-            elapsedMs,
-          );
+          return outcome.response;
         }
-
-        const generatedMessages = messages.slice(generatedIndex);
 
         this.logDebug('LangGraph completed', {
           threadKey,
           mode: 'memory',
           generatedCount: generatedMessages.length,
-          elapsedMs,
+          elapsedMs: outcome.elapsedMs,
           messages: this.describeMessages(generatedMessages),
         });
 
-        await this.transcriptPersister.persist(
-          threadKey,
-          messages,
-          generatedIndex,
-        );
-
         span.setAttribute('app.mode', 'memory');
-        span.setAttribute('app.elapsed_ms', elapsedMs);
+        span.setAttribute('app.elapsed_ms', outcome.elapsedMs);
         span.setAttribute('app.generated_count', generatedMessages.length);
-        span.setAttribute('app.history_length', history.length);
-        span.setAttribute('app.window_length', windowLength);
+        span.setAttribute('app.history_length', outcome.generatedFromIndex);
+        span.setAttribute('app.window_length', outcome.windowLength);
         span.setStatus({ code: SpanStatusCode.OK });
 
-        return this.responseComposer.compose(
-          event.chatId,
-          messages,
-          generatedIndex,
-          elapsedMs,
-        );
+        return outcome.response;
       } catch (error) {
         span.recordException(
           error instanceof Error ? error : this.describeError(error),
@@ -236,104 +166,43 @@ export class OrchestratorService {
     try {
       const useCheckpointer =
         this.configService.features.enableCheckpointer === true;
-      const userContent = this.inputNormalizer.toText(event);
 
-      let history: BaseMessage[] = [];
-      let generatedIndex = 0;
-      let windowLength = 0;
-
-      if (useCheckpointer) {
-        const assembly =
-          this.transcriptAssembler.buildForCheckpointer(userContent);
-        history = assembly.transcript;
-        generatedIndex = assembly.generatedFromIndex;
-        windowLength = history.length;
-        this.logDebug('Streaming LangGraph', {
-          threadKey,
-          mode: 'checkpointer',
-          historyLength: history.length,
-        });
-      } else {
-        await this.conversationStore.appendUser(threadKey, event);
-        const window = await this.conversationStore.loadWindow(threadKey);
-        windowLength = window.length;
-        const assembly = this.transcriptAssembler.buildFromWindow(window);
-        history = assembly.transcript;
-        generatedIndex = assembly.generatedFromIndex;
-
-        this.logDebug('Streaming LangGraph', {
-          threadKey,
-          mode: 'memory',
-          historyLength: history.length,
-          windowLength,
-        });
-      }
-
-      const streamIterator = this.graphDriver.stream({
-        history,
+      const stream = this.conversationOrchestrator.stream({
         threadKey,
-        generatedFromIndex: generatedIndex,
+        chatId: event.chatId,
+        event,
         useCheckpointer,
       });
 
-      let finalMessages: BaseMessage[] = history;
-      for await (const chunk of streamIterator) {
-        if (this.isInternalChunk(chunk)) {
-          if (Array.isArray(chunk.messages)) {
-            finalMessages = chunk.messages;
-          }
-          continue;
-        }
-
+      for await (const chunk of stream.events) {
         yield chunk;
       }
 
-      if (!finalMessages.length) {
-        finalMessages = history;
-      }
-
-      const elapsedMs = Date.now() - startedAt;
-      const modeLabel = useCheckpointer ? 'checkpointer' : 'memory';
-
-      if (!useCheckpointer) {
-        const generatedMessages = finalMessages.slice(generatedIndex);
-        await this.transcriptPersister.persist(
-          threadKey,
-          finalMessages,
-          generatedIndex,
-        );
-        span.setAttribute('app.generated_count', generatedMessages.length);
-        span.setAttribute('app.history_length', history.length);
-      } else {
-        span.setAttribute('app.generated_count', finalMessages.length);
-        span.setAttribute('app.history_length', windowLength);
-      }
+      const outcome = await stream.result;
+      const messages = outcome.transcript;
+      const generatedMessages = messages.slice(outcome.generatedFromIndex);
 
       this.logDebug('LangGraph streaming completed', {
         threadKey,
-        mode: modeLabel,
-        elapsedMs,
-        messageCount: finalMessages.length,
-        messages: this.describeMessages(finalMessages),
+        mode: outcome.mode,
+        elapsedMs: outcome.elapsedMs,
+        messageCount: messages.length,
+        messages: this.describeMessages(messages),
       });
 
-      span.setAttribute('app.mode', modeLabel);
-      span.setAttribute('app.elapsed_ms', elapsedMs);
-      span.setAttribute('app.message_count', finalMessages.length);
+      if (outcome.mode === 'memory') {
+        span.setAttribute('app.generated_count', generatedMessages.length);
+        span.setAttribute('app.history_length', outcome.generatedFromIndex);
+        span.setAttribute('app.window_length', outcome.windowLength);
+      } else {
+        span.setAttribute('app.generated_count', messages.length);
+        span.setAttribute('app.history_length', outcome.windowLength);
+      }
+
+      span.setAttribute('app.mode', outcome.mode);
+      span.setAttribute('app.elapsed_ms', outcome.elapsedMs);
+      span.setAttribute('app.message_count', messages.length);
       span.setStatus({ code: SpanStatusCode.OK });
-
-      const response = this.responseComposer.compose(
-        event.chatId,
-        finalMessages,
-        useCheckpointer ? 0 : generatedIndex,
-        elapsedMs,
-      );
-
-      yield {
-        type: 'final',
-        text: response.text,
-        meta: response.meta,
-      };
     } catch (error) {
       span.recordException(
         error instanceof Error ? error : this.describeError(error),
@@ -346,12 +215,6 @@ export class OrchestratorService {
     } finally {
       span.end();
     }
-  }
-
-  private isInternalChunk(
-    chunk: GraphStreamChunk,
-  ): chunk is GraphInternalChunk {
-    return 'kind' in chunk && chunk.kind === 'internal';
   }
 
   private runWithThreadContext<T>(
