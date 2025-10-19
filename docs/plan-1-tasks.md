@@ -20,10 +20,10 @@
 - [x] Wire `ConversationStore` and `TranscriptAssembler` into `OrchestratorService`.
 
 ## Step 4 – Extract Persistence and Response Composition
-- [ ] Introduce `TranscriptPersister` wrapping generated message persistence.
-- [ ] Add `ResponseComposer` to delegate response construction to `ResponseBuilder`.
-- [ ] Provide unit tests ensuring persistence slicing and response mapping.
-- [ ] Update orchestrator flow to use the new services.
+- [x] Introduce `TranscriptPersister` wrapping generated message persistence.
+- [x] Add `ResponseComposer` to delegate response construction to `ResponseBuilder`.
+- [x] Provide unit tests ensuring persistence slicing and response mapping.
+- [x] Update orchestrator flow to use the new services.
 
 ## Step 5 – Introduce ConversationOrchestrator Façade
 - [ ] Implement `ConversationOrchestrator` for non-command run and stream execution.

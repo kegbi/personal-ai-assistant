@@ -10,6 +10,8 @@ import { OrchestratorService } from './orchestrator.service';
 import { ResponseBuilder } from './response-builder.service';
 import { ConversationStore } from './conversation/conversation-store';
 import { TranscriptAssembler } from './conversation/transcript-assembler';
+import { TranscriptPersister } from './conversation/transcript-persister';
+import { ResponseComposer } from './conversation/response-composer';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { TranscriptAssembler } from './conversation/transcript-assembler';
     ResponseBuilder,
     ConversationStore,
     TranscriptAssembler,
+    TranscriptPersister,
+    ResponseComposer,
   ],
   exports: [OrchestratorService],
 })

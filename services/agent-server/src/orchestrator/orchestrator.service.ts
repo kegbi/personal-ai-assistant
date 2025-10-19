@@ -8,11 +8,9 @@ import { AgentResponseDto } from '../transport/dto/agent-response.dto';
 import type { AgentStreamEvent } from '../transport/dto/agent-stream-event.dto';
 import { CommandRouter } from './command-router.service';
 import { GraphFactory } from './langgraph/graph.factory';
-import { GeneratedMessagePersisterService } from './messages/generated-message-persister.service';
 import type { MessageSerializer } from './messages/interfaces/message-serializer';
 import { MESSAGE_SERIALIZER } from './messages/tokens';
 import { InputNormalizer } from './input-normalizer.service';
-import { ResponseBuilder } from './response-builder.service';
 import { AppConfigService } from '../config/config.service';
 import { RequestContext } from '../common/request-context';
 import type {
@@ -23,6 +21,8 @@ import type {
 import { DefaultGraphDriver } from './graph/default-graph-driver';
 import { ConversationStore } from './conversation/conversation-store';
 import { TranscriptAssembler } from './conversation/transcript-assembler';
+import { TranscriptPersister } from './conversation/transcript-persister';
+import { ResponseComposer } from './conversation/response-composer';
 
 /**
  * Coordinates the orchestration pipeline, connecting memory, LangGraph, and response shaping.
@@ -35,14 +35,14 @@ export class OrchestratorService {
 
   constructor(
     private readonly graphFactory: GraphFactory,
-    private readonly generatedMessagePersister: GeneratedMessagePersisterService,
     private readonly commandRouter: CommandRouter,
     private readonly inputNormalizer: InputNormalizer,
-    private readonly responseBuilder: ResponseBuilder,
     private readonly configService: AppConfigService,
     private readonly requestContext: RequestContext,
     private readonly conversationStore: ConversationStore,
     private readonly transcriptAssembler: TranscriptAssembler,
+    private readonly transcriptPersister: TranscriptPersister,
+    private readonly responseComposer: ResponseComposer,
     @Inject(MESSAGE_SERIALIZER)
     private readonly messageSerializer: MessageSerializer,
   ) {
@@ -148,7 +148,7 @@ export class OrchestratorService {
           span.setAttribute('app.message_count', messages.length);
           span.setStatus({ code: SpanStatusCode.OK });
 
-          return this.responseBuilder.build(
+          return this.responseComposer.compose(
             event.chatId,
             messages,
             generatedIndex,
@@ -166,9 +166,10 @@ export class OrchestratorService {
           messages: this.describeMessages(generatedMessages),
         });
 
-        await this.generatedMessagePersister.persistGeneratedMessages(
+        await this.transcriptPersister.persist(
           threadKey,
-          generatedMessages,
+          messages,
+          generatedIndex,
         );
 
         span.setAttribute('app.mode', 'memory');
@@ -178,7 +179,7 @@ export class OrchestratorService {
         span.setAttribute('app.window_length', windowLength);
         span.setStatus({ code: SpanStatusCode.OK });
 
-        return this.responseBuilder.build(
+        return this.responseComposer.compose(
           event.chatId,
           messages,
           generatedIndex,
@@ -296,9 +297,10 @@ export class OrchestratorService {
 
       if (!useCheckpointer) {
         const generatedMessages = finalMessages.slice(generatedIndex);
-        await this.generatedMessagePersister.persistGeneratedMessages(
+        await this.transcriptPersister.persist(
           threadKey,
-          generatedMessages,
+          finalMessages,
+          generatedIndex,
         );
         span.setAttribute('app.generated_count', generatedMessages.length);
         span.setAttribute('app.history_length', history.length);
@@ -320,7 +322,7 @@ export class OrchestratorService {
       span.setAttribute('app.message_count', finalMessages.length);
       span.setStatus({ code: SpanStatusCode.OK });
 
-      const response = this.responseBuilder.build(
+      const response = this.responseComposer.compose(
         event.chatId,
         finalMessages,
         useCheckpointer ? 0 : generatedIndex,
